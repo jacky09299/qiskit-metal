@@ -778,23 +778,99 @@ if draw_folded_TL:
     folded_path[0] = (current_x, current_y)
     path_index = 1
     for i in range(n_folds):
-        # 上半部垂直線
+        is_wide = (i % 2 == 0)
+        
+        # === 蘑菇頭高度參數 ===
+        dy = 0.05      # 往上/下延伸的脖子長度
+        h_cap = 0.15   # 蘑菇頭的帽子高度
+        
+        # 1. 上半部垂直線
         current_y += upper_vertical
         folded_path[path_index] = (current_x, current_y)
         path_index += 1
-        # 上橫線 (平的)
-        current_x += upper_horizontal
-        folded_path[path_index] = (current_x, current_y)
-        path_index += 1
-        # 垂直線
+        
+        if is_wide:
+            # 頂部蘑菇頭 (左右延伸對齊前後的垂直線，中心對中心)
+            w_ext_left = lower_horizontal
+            w_ext_right = lower_horizontal
+            
+            current_y += dy
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            
+            current_x -= w_ext_left
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            
+            current_y += h_cap
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            
+            current_x += (w_ext_left + upper_horizontal + w_ext_right)
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            
+            current_y -= h_cap
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            
+            current_x -= w_ext_right
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            
+            current_y -= dy
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+        else:
+            # 正常上橫線
+            current_x += upper_horizontal
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+        
+        # 3. 垂直線向下
         current_y -= vertical_line
         folded_path[path_index] = (current_x, current_y)
         path_index += 1
-        # 下橫線 (平的)
-        current_x += lower_horizontal
-        folded_path[path_index] = (current_x, current_y)
-        path_index += 1
-        # 下半部垂直線
+        
+        if is_wide:
+            # 底部蘑菇頭 (左右延伸對齊前後的垂直線，中心對中心)
+            w_ext_left = upper_horizontal
+            w_ext_right = upper_horizontal
+            
+            current_y -= dy
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            
+            current_x -= w_ext_left
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            
+            current_y -= h_cap
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            
+            current_x += (w_ext_left + lower_horizontal + w_ext_right)
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            
+            current_y += h_cap
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            
+            current_x -= w_ext_right
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            
+            current_y += dy
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+        else:
+            # 正常下橫線
+            current_x += lower_horizontal
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            
+        # 5. 下半部垂直線
         current_y += lower_vertical
         folded_path[path_index] = (current_x, current_y)
         path_index += 1
@@ -1699,5 +1775,7 @@ design.renderers.gds.options['max_points'] = '10000000'
 #design.renderers.gds.options['corners'] = 'circular bend'
 #design.renderers.gds.options['chord_error'] = '1um'
 
+print("Before export")
 design.renderers.gds.export_to_gds(save_file_name)
+print("After export")
 
