@@ -581,7 +581,7 @@ def build_coupling_pad(design, config):
             )
         )
 
-def build_markers(design):
+def build_markers(design, config):
     x_mark, y_mark = 2.5, 4.1
     x_0 , y_0 = x_mark-0.05, y_mark-0.05
     x_cross, y_cross = x_mark-0.05+0.07925, y_mark+0.0025
