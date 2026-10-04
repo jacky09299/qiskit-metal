@@ -39,7 +39,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-# In[2]:
+'''# In[2]:
 
 
 # 定義所有版本的完整參數
@@ -180,11 +180,11 @@ configs = {
         "draw_couple_line_1": True,
         "draw_couple_line_2": False,
     }
-}    
+} '''   
 
 
 
-# In[3]:
+'''# In[3]:
 
 
 target_version = "4-2" 
@@ -252,7 +252,7 @@ qubit_2_posy = -2
 
 
 cpw_width = 0.01
-cpw_gap = 0.006
+cpw_gap = 0.006'''
 
 # In[6]:
 
@@ -608,7 +608,7 @@ gui.screenshot()
 
 # In[13]:
 
-
+'''
 def find_bc_solutions(L, delta, max_n=100):
     """
     在 n = 1,2,...,max_n 範圍內搜尋 (b, c) 解。
@@ -634,7 +634,7 @@ def find_bc_solutions(L, delta, max_n=100):
             solutions.append((n, c, b_min, b_max))
             print(f"n={n}, c={c:.3f}, b_min={b_min:.3f}, b_max={b_max:.3f}")
     return solutions
-
+'''
 
 # In[14]:
 
@@ -818,7 +818,7 @@ print(f"設計的總長度: {total_length}mm")
 
 # In[15]:
 
-
+'''
 def get_xy_on_folded_path(folded_path, s):
     """
     給定folded_path (OrderedDict, key為int, value為(x, y)) 和長度s (mm)，
@@ -866,11 +866,11 @@ def get_xy_on_folded_path(folded_path, s):
             return (x, y), tag
 
         total += seg_len
-
+'''
 
 # In[16]:
 
-
+'''
 class LShapedCPW:
     """
     通用的 L 型 CPW 走线类，支持以下六种类型：
@@ -1156,7 +1156,7 @@ class LShapedCPW:
                 lead = dict(start_straight=leading)
             )
         )
-
+'''
 
 # In[17]:
 
@@ -1432,7 +1432,7 @@ def create_u_shape(design, cx, cy, name='u_shape', bl=0.3, sh=0.1, tw=0.01):
     u_shape = UShapeComponent(design, name, bl, sh, tw)
     u_shape.create(cx, cy)
     return u_shape
-
+'''
 
 qubit_couple_gap = 0.06
 if draw_coupling_pad_1:
@@ -1503,7 +1503,7 @@ if draw_couple_line_2:
 gui.rebuild()
 gui.autoscale()
 gui.screenshot()
-'''
+
 
 # In[20]:
 
