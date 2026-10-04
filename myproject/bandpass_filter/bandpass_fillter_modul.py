@@ -270,7 +270,7 @@ print(var)
 
 # In[7]:
 
-
+'''
 """
 Set 8 ports. 2 for readout TL, 3 for charge line and 3 for flux line. 
 """
@@ -318,11 +318,11 @@ if draw_R4:
 gui.rebuild()
 gui.autoscale()
 gui.screenshot()
-
+'''
 
 # In[8]:
 
-
+'''
 """
 Set transmission line (TL).
 """
@@ -377,11 +377,11 @@ if draw_TL_straight:
     gui.rebuild()
     gui.autoscale()
     gui.screenshot()
-
+'''
 
 # In[9]:
 
-
+'''
 """
 Set 3 separated fluxonia with rectangles. Make sure the layers of fluxonium components are correct for fabrication process. 
 """
@@ -407,11 +407,11 @@ if draw_pocket_2:
 gui.rebuild()
 gui.autoscale()
 gui.screenshot()
-
+'''
 
 # In[10]:
 
-
+'''
 """
 Set resonators.
 """
@@ -494,11 +494,11 @@ if draw_reso_2:
 gui.rebuild()
 gui.autoscale()
 gui.screenshot()
-
+'''
 
 # In[11]:
 
-
+'''
 """
 Flux bias line for each qubit. 
 """
@@ -551,11 +551,11 @@ if draw_fl_2:
 gui.rebuild()
 gui.autoscale()
 gui.screenshot()
-
+'''
 
 # In[12]:
 
-
+'''
 """
 Charge line for each qubit. 
 """
@@ -604,7 +604,7 @@ if draw_cl_2:
 gui.rebuild()
 gui.autoscale()
 gui.screenshot()
-
+'''
 
 # In[13]:
 
@@ -638,7 +638,7 @@ def find_bc_solutions(L, delta, max_n=100):
 
 # In[14]:
 
-
+'''
 """
 Add folded transmission line between bottom ports (port_L4 and port_R4)
 Total length: 49.51576mm with folded structure
@@ -814,7 +814,7 @@ gui.rebuild()
 gui.autoscale()
 gui.screenshot()
 print(f"設計的總長度: {total_length}mm")
-
+'''
 
 # In[15]:
 
@@ -1160,7 +1160,7 @@ class LShapedCPW:
 
 # In[17]:
 
-
+'''
 # 參數設定
 #s_pre = [0.0, 7.97377, 9.15059, 9.35664, 9.15059, 7.97377]
 #s_pre = [0.0, 8.59091, 9.51299, 9.61708, 9.51299, 8.59091]
@@ -1204,7 +1204,7 @@ if draw_folded_TL:
 gui.rebuild()
 gui.autoscale()
 gui.screenshot()
-
+'''
 '''
 # In[18]:
 
@@ -1433,7 +1433,7 @@ def create_u_shape(design, cx, cy, name='u_shape', bl=0.3, sh=0.1, tw=0.01):
     u_shape.create(cx, cy)
     return u_shape
 '''
-
+'''
 qubit_couple_gap = 0.06
 if draw_coupling_pad_1:
     padbottom_x = Q1.options.pos_x
@@ -1503,7 +1503,7 @@ if draw_couple_line_2:
 gui.rebuild()
 gui.autoscale()
 gui.screenshot()
-
+'''
 
 # In[20]:
 
@@ -1559,7 +1559,7 @@ gui.screenshot()
 
 # In[21]:
 
-
+'''
 x_mark, y_mark = 2.5, 4.1
 x_0 , y_0 = x_mark-0.05, y_mark-0.05
 x_cross, y_cross = x_mark-0.05+0.07925, y_mark+0.0025
@@ -1637,7 +1637,7 @@ mark_4['mark_t_tri_4'].options.orientation = 270
 gui.rebuild()
 gui.autoscale()
 gui.screenshot()
-
+'''
 
 # In[22]:
 
