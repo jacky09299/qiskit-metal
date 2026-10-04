@@ -1,3 +1,6 @@
+from qiskit_metal import Dict
+from qiskit_metal.toolbox_metal.parsing import parse_value
+
 # 定義所有版本的完整參數
 # 每個 Key (如 '3-1') 裡面都要包含「所有」需要的變數
 configs = {

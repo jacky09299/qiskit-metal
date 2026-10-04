@@ -1,3 +1,12 @@
+import numpy as np
+from qiskit_metal.qlibrary.core import QComponent
+from qiskit_metal.qlibrary.sample_shapes.rectangle import Rectangle
+from qiskit_metal.qlibrary.tlines.straight_path import RouteStraight
+from qiskit_metal.qlibrary.tlines.anchored_path import RouteAnchors
+from qiskit_metal.qlibrary.terminations.short_to_ground import ShortToGround
+import config
+import utils
+
 class LShapedCPW:
     """
     通用的 L 型 CPW 走线类，支持以下六种类型：

@@ -1,3 +1,6 @@
+import numpy as np
+from collections import OrderedDict
+
 def find_bc_solutions(L, delta, max_n=100):
     """
     在 n = 1,2,...,max_n 範圍內搜尋 (b, c) 解。
