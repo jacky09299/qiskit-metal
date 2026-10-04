@@ -696,31 +696,79 @@ gui.screenshot()
 # In[13]:
 
 
-def find_bc_solutions(L, delta, max_n=100):
-    """
-    在 n = 1,2,...,max_n 範圍內搜尋 (b, c) 解。
-    條件：
-      n = (L - delta) / (2c) 為正整數
-      floor((L-b)/(2*(b+c))) == n  == (L-delta)/(2c)
-    回傳值：一個 list，每項為 (n, c, b_min, b_max)，
-      其中 b_min < b <= b_max。
-    """
+def simulate_meander(c, b, N_equiv, s_list, a=0.01):
+    comp = (-2 + np.pi/2) * a
+    L_curr = 0
+    folds_used = 0
+    bridges_used = 0
+    sk_idx = 1
+    L_curr += b + (-1 + np.pi/2) * a
+    bridge_indices = []
+    while folds_used < N_equiv:
+        on_up = False
+        if sk_idx < len(s_list) and L_curr <= s_list[sk_idx] <= L_curr + c + comp:
+            on_up = True
+            sk_idx += 1
+        on_down_if_normal = False
+        if not on_up and sk_idx < len(s_list):
+            start_down_normal = L_curr + c + comp + b + comp
+            if start_down_normal <= s_list[sk_idx] <= start_down_normal + c + comp:
+                on_down_if_normal = True
+        on_down_if_bridge = False
+        if not on_up and sk_idx < len(s_list):
+            start_down_bridge = L_curr + c + comp + 3*b + comp
+            if start_down_bridge <= s_list[sk_idx] <= start_down_bridge + c + comp:
+                on_down_if_bridge = True
+        if on_up:
+            is_bridge = True
+        elif on_down_if_normal:
+            if on_down_if_bridge:
+                is_bridge = True
+                sk_idx += 1
+            else:
+                return False, "Target shifted off DOWN leg"
+        else:
+            is_bridge = False
+        if is_bridge:
+            L_curr += c + comp + 3*b + comp + c + comp + b + comp
+            bridge_indices.append(folds_used)
+            folds_used += 2
+            bridges_used += 1
+        else:
+            L_curr += c + comp + b + comp + c + comp + b + comp
+            folds_used += 1
+        if sk_idx < len(s_list) and s_list[sk_idx] < L_curr:
+            return False, "Target fell on horizontal leg"
+    if sk_idx < len(s_list):
+        return False, "Not all targets reached"
+    if bridges_used != len(s_list) - 1:
+        return False, "Wrong number of bridges"
+    return True, bridge_indices
+
+def find_optimal_solution(L_target, s_list, max_n=40, width=5.4):
     solutions = []
-    for n in range(1, max_n+1):
-        # 計算 c
-        c = (L - delta) / (2 * n)
-        if c <= 0:
-            continue
-
-        # 計算 b 的不等式邊界
-        b_min = ((n+1)*delta - L) / (n*(2*n+3))  # 下界 (strict)
-        b_max = delta / (2*n+1)                  # 上界 (inclusive)
-
-        # 判斷是否有可行 b
-        if b_min < b_max and b_max>0.1:
-            solutions.append((n, c, b_min, b_max))
-            print(f"n={n}, c={c:.3f}, b_min={b_min:.3f}, b_max={b_max:.3f}")
+    for N_equiv in range(15, max_n + 1):
+        for b in np.linspace(0.100, 0.150, 501):
+            if 2 * b * N_equiv > width:
+                continue
+            N_V = 2 * N_equiv - 2 * (len(s_list) - 1)
+            if N_V <= 0:
+                continue
+            num_corners = 4 * N_equiv - 2 * (len(s_list) - 1) + 2
+            total_comp = (-1 + np.pi/2) * 0.01 + (num_corners - 1) * (-2 + np.pi/2) * 0.01
+            c = (L_target - 2 * b * N_equiv - total_comp) / N_V
+            if c > 1.2 or c < 0.1:
+                continue
+            success, res = simulate_meander(c, b, N_equiv, s_list)
+            if success:
+                solutions.append({
+                    "N_equiv": N_equiv,
+                    "c": c,
+                    "b": b,
+                    "bridge_indices": res
+                })
     return solutions
+
 
 
 # In[14]:
@@ -957,7 +1005,7 @@ def get_xy_on_folded_path(folded_path, s):
 
 # In[16]:
 
-'''
+
 class LShapedCPW:
     """
     通用的 L 型 CPW 走线类，支持以下六种类型：
@@ -1292,7 +1340,7 @@ gui.rebuild()
 gui.autoscale()
 gui.screenshot()
 
-
+'''
 # In[18]:
 
 
