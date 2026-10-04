@@ -1,5 +1,6 @@
 import numpy as np
 from collections import OrderedDict
+import config
 
 def find_bc_solutions(L, delta, max_n=100):
     """
@@ -50,7 +51,7 @@ def get_xy_on_folded_path(folded_path, s):
     # 計算每段長度
     seg_lens = [np.hypot(points[i+1][0]-points[i][0], points[i+1][1]-points[i][1]) for i in range(len(points)-1)]
     # 扣掉轉角補償
-    a = cpw_width # 轉角半徑
+    a = config.cpw_width # 轉角半徑
     seg_lens = [seg_lens[0] + (-1 + np.pi/2) * a] + [s + (-2 + np.pi/2) * a for s in seg_lens[1:]]
 
     if s == 0:
