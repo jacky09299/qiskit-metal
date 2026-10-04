@@ -22,7 +22,7 @@ class LShapedCPW:
     def __init__(self, design, name,
                  start_x, start_y,
                  total_length,
-                 trace_width=cpw_width, trace_gap=cpw_gap, fillet=None,
+                 trace_width=config.cpw_width, trace_gap=config.cpw_gap, fillet=None,
                  trace_type=None,
                  folded_path=None, s=None):
         self.design = design
@@ -32,7 +32,7 @@ class LShapedCPW:
         self.start_component = folded_TL.name
         self.trace_width = trace_width
         self.trace_gap = trace_gap
-        self.fillet = cpw_width/2 + cpw_gap + 0.006
+        self.fillet = config.cpw_width/2 + config.cpw_gap + 0.006
         self.start_pin = "bottom"  # 默认起始 pin
         self.folded_path = folded_path
         self.s = s
@@ -77,21 +77,21 @@ class LShapedCPW:
             short_x = sx
             short_y = sy - self.total
             self._add_short(short_x, short_y, orientation="270")
-            folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = cpw_width, input_as_norm=True)
+            folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
             self.start_pin = f"{self.name}_start"
             RouteStraight(design, self.name, options=dict(
                 pin_inputs=dict(
                     start_pin=dict(component="folded_TL", pin=f"{self.name}_start"),
                     end_pin=dict(component=self.short_name, pin="short")
                 ),
-                trace_width=cpw_width, trace_gap=cpw_gap
+                trace_width=config.cpw_width, trace_gap=config.cpw_gap
             ))
             return
 
         short_x = sx + (self.total - down) + (2 - np.pi/2) * self.fillet
         short_y = sy - down
         self._add_short(short_x, short_y, orientation="0")
-        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = cpw_width, input_as_norm=True)
+        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
         self.start_pin = f"{self.name}_start"
         anchors = {
             "0": (sx, short_y)
@@ -109,14 +109,14 @@ class LShapedCPW:
             short_x = sx + self.total
             short_y = sy
             self._add_short(short_x, short_y, orientation="0")
-            folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx+0.0000001,sy]],width = cpw_width, input_as_norm=True)
+            folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx+0.0000001,sy]],width = config.cpw_width, input_as_norm=True)
             self.start_pin = f"{self.name}_start"
             RouteStraight(design, self.name, options=dict(
                 pin_inputs=dict(
                     start_pin=dict(component="folded_TL", pin=f"{self.name}_start"),
                     end_pin=dict(component=self.short_name, pin="short")
                 ),
-                trace_width=cpw_width, trace_gap=cpw_gap
+                trace_width=config.cpw_width, trace_gap=config.cpw_gap
             ))
             return
         mid_x = sx + small
@@ -124,7 +124,7 @@ class LShapedCPW:
         short_x = mid_x
         short_y = sy - (self.total - small + (2 - np.pi/2) * self.fillet)
 
-        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx+0.0000001,sy]],width = cpw_width, input_as_norm=True)
+        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx+0.0000001,sy]],width = config.cpw_width, input_as_norm=True)
         self.start_pin = f"{self.name}_start"
 
         # 判斷是否需要再折一次
@@ -163,21 +163,21 @@ class LShapedCPW:
             short_x = sx - self.total
             short_y = sy
             self._add_short(short_x, short_y, orientation="180")
-            folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx-0.0000001,sy]],width = cpw_width, input_as_norm=True)
+            folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx-0.0000001,sy]],width = config.cpw_width, input_as_norm=True)
             self.start_pin = f"{self.name}_start"
             RouteStraight(design, self.name, options=dict(
                 pin_inputs=dict(
                     start_pin=dict(component="folded_TL", pin=f"{self.name}_start"),
                     end_pin=dict(component=self.short_name, pin="short")
                 ),
-                trace_width=cpw_width, trace_gap=cpw_gap
+                trace_width=config.cpw_width, trace_gap=config.cpw_gap
             ))
             return
         mid_x = sx - small
         mid_y = sy
         short_x = mid_x
         short_y = sy - (self.total - small + (2 - np.pi/2) * self.fillet)
-        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx-0.0000001,sy]],width = cpw_width, input_as_norm=True)
+        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx-0.0000001,sy]],width = config.cpw_width, input_as_norm=True)
         self.start_pin = f"{self.name}_start"
 
         port4y = port_R4.options.pos_y
@@ -212,7 +212,7 @@ class LShapedCPW:
         short_x = sx + (self.total - down + (2 - np.pi/2) * self.fillet)
         short_y = sy - down
         self._add_short(short_x, short_y, orientation="0")
-        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = cpw_width, input_as_norm=True)
+        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
         self.start_pin = f"{self.name}_start"
         anchors = {
                 "0": (mid_x, mid_y)
@@ -225,14 +225,14 @@ class LShapedCPW:
         short_x = sx
         short_y = sy - self.total
         self._add_short(short_x, short_y, orientation="270")
-        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = cpw_width, input_as_norm=True)
+        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
         self.start_pin = f"{self.name}_start"
         RouteStraight(design, self.name, options=dict(
             pin_inputs=dict(
                 start_pin=dict(component="folded_TL", pin=f"{self.name}_start"),
                 end_pin=dict(component=self.short_name, pin="short")
             ),
-            trace_width=cpw_width, trace_gap=cpw_gap
+            trace_width=config.cpw_width, trace_gap=config.cpw_gap
         ))
 
     def _build_end_L(self):
@@ -244,14 +244,14 @@ class LShapedCPW:
             short_x = sx
             short_y = sy - self.total
             self._add_short(short_x, short_y, orientation="270")
-            folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = cpw_width, input_as_norm=True)
+            folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
             self.start_pin = f"{self.name}_start"
             RouteStraight(design, self.name, options=dict(
                 pin_inputs=dict(
                     start_pin=dict(component="folded_TL", pin=f"{self.name}_start"),
                     end_pin=dict(component=self.short_name, pin="short")
                 ),
-                trace_width=cpw_width, trace_gap=cpw_gap
+                trace_width=config.cpw_width, trace_gap=config.cpw_gap
             ))
             return
         mid_x = sx
@@ -259,7 +259,7 @@ class LShapedCPW:
         short_x = mid_x - (self.total - down + (2 - np.pi/2) * self.fillet)
         short_y = mid_y
         self._add_short(short_x, short_y, orientation="180")
-        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = cpw_width, input_as_norm=True)
+        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
         self.start_component = 'folded_TL'
         self.start_pin = f"{self.name}_start"
         anchors = {
@@ -377,7 +377,7 @@ class UShapeComponent:
             )
         )
 
-        self.rect_bottom.add_pin(f"node", points = [[cx,cy],[cx,cy-0.0000001]],width = cpw_width, input_as_norm=True)
+        self.rect_bottom.add_pin(f"node", points = [[cx,cy],[cx,cy-0.0000001]],width = config.cpw_width, input_as_norm=True)
 
 
         return self
