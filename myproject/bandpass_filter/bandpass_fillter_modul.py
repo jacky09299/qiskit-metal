@@ -254,93 +254,6 @@ qubit_2_posy = -2
 cpw_width = 0.01
 cpw_gap = 0.006
 
-
-# In[4]:
-
-
-class VirtualJunction(QComponent):
-    """
-    A component with no geometry, only pins.
-    Used to create a T-junction for routing.
-    """
-    # 定義元件的預設參數
-    default_options = dict(
-        pin_width=cpw_width # 讓 pin 的寬度可以被設定
-    )
-
-    def make(self):
-        """
-        This is the method that Qiskit Metal calls to draw the component.
-        We will only add pins here and no geometry.
-        """
-        p = self.p  # 取得解析後的參數 (parsed options)
-
-        # 取得元件的中心位置
-        pos_x = p.pos_x
-        pos_y = p.pos_y
-
-        # 定義三個 pin，它們的向量都從中心點向外指
-        # pin 的格式是 [起點, 終點]
-        pin_len = 1e-6 # 一個極小值，只用來定義方向
-
-        # pin 的法向量 (normal vector) 會從第一個點指向第二個點
-        # Route* 元件會從 pin 的終點開始連接
-        pin_left = [[pos_x, pos_y+p.pin_width/2], [pos_x - pin_len, pos_y+p.pin_width/2]]
-        pin_right = [[pos_x, pos_y-p.pin_width/2], [pos_x + pin_len, pos_y-p.pin_width/2]]
-        pin_bottom = [[pos_x-p.pin_width/2, pos_y], [pos_x-p.pin_width/2, pos_y - pin_len]]
-        pin_top = [[pos_x+p.pin_width/2, pos_y], [pos_x+p.pin_width/2, pos_y + pin_len]]
-
-        # 將 pins 加入到元件中
-        self.add_pin('left', points=pin_left, width=p.pin_width)
-        self.add_pin('right', points=pin_right, width=p.pin_width)
-        self.add_pin('bottom', points=pin_bottom, width=p.pin_width)
-        self.add_pin('top', points=pin_top, width=p.pin_width)
-
-
-# In[5]:
-
-
-class VirtualJunction(QComponent):
-    """
-    A component with no geometry, only pins.
-    Used to create a T-junction for routing.
-    """
-    # 定義元件的預設參數
-    default_options = dict(
-        pin_width=cpw_width # 讓 pin 的寬度可以被設定
-    )
-
-    def make(self):
-        """
-        This is the method that Qiskit Metal calls to draw the component.
-        We will only add pins here and no geometry.
-        """
-        p = self.p  # 取得解析後的參數 (parsed options)
-
-        # 取得元件的中心位置
-        pos_x = p.pos_x
-        pos_y = p.pos_y
-
-        # 定義三個 pin，它們的向量都從中心點向外指
-        # pin 的格式是 [起點, 終點]
-        pin_len = 1e-6 # 一個極小值，只用來定義方向
-
-        # pin 的法向量 (normal vector) 會從第一個點指向第二個點
-        # Route* 元件會從 pin 的終點開始連接
-        pin_left = [[pos_x, pos_y], [pos_x - pin_len, pos_y]]
-        pin_right = [[pos_x, pos_y], [pos_x + pin_len, pos_y]]
-        pin_bottom = [[pos_x, pos_y], [pos_x, pos_y - pin_len]]
-        pin_top = [[pos_x, pos_y], [pos_x, pos_y + pin_len]]
-
-        # 將 pins 加入到元件中
-        self.add_pin('left', points=pin_left, width=p.pin_width, input_as_norm=True)
-        self.add_pin('right', points=pin_right, width=p.pin_width, input_as_norm=True)
-        self.add_pin('bottom', points=pin_bottom, width=p.pin_width, input_as_norm=True)
-        self.add_pin('top', points=pin_top, width=p.pin_width, input_as_norm=True)
-
-
-# # Circuit Design
-
 # In[6]:
 
 
@@ -1551,7 +1464,7 @@ for i in range(n_folds):
     x1, y1 = folded_path[idx_end]
     xm = (x0 + x1) / 2
     ym = (y0 + y1) / 2
-    # 放 VirtualJunction
+    
     folded_TL.add_pin(f"couple_point{i+1}", points = [[xm,ym],[xm,ym+0.0000001]],width = cpw_width, input_as_norm=True)
 
 
