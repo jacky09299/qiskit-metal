@@ -27,9 +27,9 @@ class LShapedCPW:
                  folded_path=None, s=None):
         self.design = design
         self.name = name
-        (self.start_x, self.start_y), self.tag = get_xy_on_folded_path(folded_path, s)
+        (self.start_x, self.start_y), self.tag = utils.get_xy_on_folded_path(folded_path, s)
         self.total = total_length
-        self.start_component = folded_TL.name
+        self.start_component = self.design.components['folded_TL'].name
         self.trace_width = trace_width
         self.trace_gap = trace_gap
         self.fillet = config.cpw_width/2 + config.cpw_gap + 0.006
@@ -77,9 +77,9 @@ class LShapedCPW:
             short_x = sx
             short_y = sy - self.total
             self._add_short(short_x, short_y, orientation="270")
-            folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
+            self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
             self.start_pin = f"{self.name}_start"
-            RouteStraight(design, self.name, options=dict(
+            RouteStraight(self.design, self.name, options=dict(
                 pin_inputs=dict(
                     start_pin=dict(component="folded_TL", pin=f"{self.name}_start"),
                     end_pin=dict(component=self.short_name, pin="short")
@@ -91,7 +91,7 @@ class LShapedCPW:
         short_x = sx + (self.total - down) + (2 - np.pi/2) * self.fillet
         short_y = sy - down
         self._add_short(short_x, short_y, orientation="0")
-        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
+        self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
         self.start_pin = f"{self.name}_start"
         anchors = {
             "0": (sx, short_y)
@@ -109,9 +109,9 @@ class LShapedCPW:
             short_x = sx + self.total
             short_y = sy
             self._add_short(short_x, short_y, orientation="0")
-            folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx+0.0000001,sy]],width = config.cpw_width, input_as_norm=True)
+            self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx+0.0000001,sy]],width = config.cpw_width, input_as_norm=True)
             self.start_pin = f"{self.name}_start"
-            RouteStraight(design, self.name, options=dict(
+            RouteStraight(self.design, self.name, options=dict(
                 pin_inputs=dict(
                     start_pin=dict(component="folded_TL", pin=f"{self.name}_start"),
                     end_pin=dict(component=self.short_name, pin="short")
@@ -124,11 +124,11 @@ class LShapedCPW:
         short_x = mid_x
         short_y = sy - (self.total - small + (2 - np.pi/2) * self.fillet)
 
-        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx+0.0000001,sy]],width = config.cpw_width, input_as_norm=True)
+        self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx+0.0000001,sy]],width = config.cpw_width, input_as_norm=True)
         self.start_pin = f"{self.name}_start"
 
         # 判斷是否需要再折一次
-        port4y = port_R4.options.pos_y
+        port4y = self.design.components['port_R4'].options.pos_y
         ######################################################################################
         if short_y < port4y - 0.6:
             fold_x = mid_x
@@ -163,9 +163,9 @@ class LShapedCPW:
             short_x = sx - self.total
             short_y = sy
             self._add_short(short_x, short_y, orientation="180")
-            folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx-0.0000001,sy]],width = config.cpw_width, input_as_norm=True)
+            self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx-0.0000001,sy]],width = config.cpw_width, input_as_norm=True)
             self.start_pin = f"{self.name}_start"
-            RouteStraight(design, self.name, options=dict(
+            RouteStraight(self.design, self.name, options=dict(
                 pin_inputs=dict(
                     start_pin=dict(component="folded_TL", pin=f"{self.name}_start"),
                     end_pin=dict(component=self.short_name, pin="short")
@@ -177,10 +177,10 @@ class LShapedCPW:
         mid_y = sy
         short_x = mid_x
         short_y = sy - (self.total - small + (2 - np.pi/2) * self.fillet)
-        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx-0.0000001,sy]],width = config.cpw_width, input_as_norm=True)
+        self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx-0.0000001,sy]],width = config.cpw_width, input_as_norm=True)
         self.start_pin = f"{self.name}_start"
 
-        port4y = port_R4.options.pos_y
+        port4y = self.design.components['port_R4'].options.pos_y
         if short_y < port4y - 0.6:
             fold_x = mid_x
             fold_y = port4y - 0.6
@@ -212,7 +212,7 @@ class LShapedCPW:
         short_x = sx + (self.total - down + (2 - np.pi/2) * self.fillet)
         short_y = sy - down
         self._add_short(short_x, short_y, orientation="0")
-        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
+        self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
         self.start_pin = f"{self.name}_start"
         anchors = {
                 "0": (mid_x, mid_y)
@@ -225,9 +225,9 @@ class LShapedCPW:
         short_x = sx
         short_y = sy - self.total
         self._add_short(short_x, short_y, orientation="270")
-        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
+        self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
         self.start_pin = f"{self.name}_start"
-        RouteStraight(design, self.name, options=dict(
+        RouteStraight(self.design, self.name, options=dict(
             pin_inputs=dict(
                 start_pin=dict(component="folded_TL", pin=f"{self.name}_start"),
                 end_pin=dict(component=self.short_name, pin="short")
@@ -244,9 +244,9 @@ class LShapedCPW:
             short_x = sx
             short_y = sy - self.total
             self._add_short(short_x, short_y, orientation="270")
-            folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
+            self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
             self.start_pin = f"{self.name}_start"
-            RouteStraight(design, self.name, options=dict(
+            RouteStraight(self.design, self.name, options=dict(
                 pin_inputs=dict(
                     start_pin=dict(component="folded_TL", pin=f"{self.name}_start"),
                     end_pin=dict(component=self.short_name, pin="short")
@@ -259,7 +259,7 @@ class LShapedCPW:
         short_x = mid_x - (self.total - down + (2 - np.pi/2) * self.fillet)
         short_y = mid_y
         self._add_short(short_x, short_y, orientation="180")
-        folded_TL.add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
+        self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
         self.start_component = 'folded_TL'
         self.start_pin = f"{self.name}_start"
         anchors = {
