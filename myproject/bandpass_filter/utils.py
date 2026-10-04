@@ -29,7 +29,7 @@ def find_bc_solutions(L, delta, max_n=100):
     
     
     
-    def get_xy_on_folded_path(folded_path, s):
+def get_xy_on_folded_path(folded_path, s):
     """
     給定folded_path (OrderedDict, key為int, value為(x, y)) 和長度s (mm)，
     回傳走s後的(x, y)座標。
