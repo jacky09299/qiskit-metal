@@ -6,13 +6,13 @@ from qiskit_metal import MetalGUI, Dict, open_docs
 from collections import OrderedDict
 from qiskit_metal.qlibrary.core import QComponent
 
-from src.qiskit_metal.qlibrary.sample_shapes.rectangle import Rectangle
-from src.qiskit_metal.qlibrary.sample_shapes.rectangle_hollow import RectangleHollow
-from src.qiskit_metal.qlibrary.user_components.self_define import Cross
-from src.qiskit_metal.qlibrary.user_components.fillet_q import Fillet_Qubit
-from src.qiskit_metal.qlibrary.user_components.round_tee import Round_Tee
-from src.qiskit_metal.qlibrary.qubits.transmon_pocket import TransmonPocket
-from src.qiskit_metal.qlibrary.sample_shapes.right_triangle import RightTriangle
+from qiskit_metal.qlibrary.sample_shapes.rectangle import Rectangle
+from qiskit_metal.qlibrary.sample_shapes.rectangle_hollow import RectangleHollow
+from qiskit_metal.qlibrary.user_components.self_define import Cross
+from qiskit_metal.qlibrary.user_components.fillet_q import Fillet_Qubit
+from qiskit_metal.qlibrary.user_components.round_tee import Round_Tee
+from qiskit_metal.qlibrary.qubits.transmon_pocket import TransmonPocket
+from qiskit_metal.qlibrary.sample_shapes.right_triangle import RightTriangle
 
 from qiskit_metal.qlibrary.terminations.open_to_ground import OpenToGround
 from qiskit_metal.qlibrary.terminations.short_to_ground import ShortToGround
