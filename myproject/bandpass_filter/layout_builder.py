@@ -338,6 +338,25 @@ def build_folded_tl(design, config):
         S_target = 5.5
         r = config.cpw_width/2 + config.cpw_gap + 0.006
         solution = solve_circuit(p, L_target, S_target, r, n_min=2, n_max=60)
+        prm = solution["params"]
+        a, b, c, d, l0 = prm["a"], prm["b"], prm["c"], prm["d"], prm["l0"]
+        n = solution["n"]
+        
+        # 2. 取出希臘字母陣列
+        arrs = solution["ten_arrays"]
+        alpha   = arrs["alpha"]
+        beta    = arrs["beta"]
+        gamma   = arrs["gamma"]
+        delta   = arrs["delta"]
+        epsilon = arrs["epsilon"]
+        lamb    = arrs["lambda"]
+        zeta      = arrs["zeta"]     # 💡 注意：你在 matrix_to_ten_arrays 裡叫
+  zeta，但在畫圖時叫 xi
+        mu      = arrs["mu"]
+        eta     = arrs["eta"]
+        theta   = arrs["theta"]
+        start_x, start_y = port_L4.options.pos_x, port_L4.options.pos_y
+        folded_path = self.generate_meander_points(start_x, start_y, n, alpha, beta, gamma, delta, epsilon, lamb, zeta, mu, eta, theta, a, b, c, d, l0)
 
         # 使用 RoutePathfinder 來避免 RouteAnchors 的自動連接限制
         folded_TL = RouteAnchors(
