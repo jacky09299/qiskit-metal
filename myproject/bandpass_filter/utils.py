@@ -175,6 +175,8 @@ def build_M(n, ops):
     根據週期數 n 與操作序列 ops (例如 [('m1', 1), ('m3', 2)]) 建立 n x 11 狀態矩陣 M。
     回傳: (是否合法, 矩陣 M, 每個操作對應的鉛直線格位清單 target_cells)
     """
+    # 0=alpha, 1=beta, 2=gamma, 3=delta, 4=epsilon, 5=lambda,
+    # 6=xi, 7=mu, 8=eta, 9=theta_, 10=theta|
     M = np.ones((n, 11), dtype=int)
     M[:, 5] = 0  # lambda 初始為 0
     M[:, 7] = 0  # mu 初始為 0
@@ -508,6 +510,90 @@ def print_solution(sol, p, r):
     print("• 分岔點落點明細驗證：")
     is_correct_branches(sol["M"], p, prm["a"], prm["b"], prm["c"], prm["d"], prm["l0"], r)
     print("=" * 60)
+
+def generate_meander_points(M, a, b, c, d, l0):
+    # 0=alpha, 1=beta, 2=gamma, 3=delta, 4=epsilon, 5=lambda,
+    # 6=xi, 7=mu, 8=eta, 9=theta_, 10=theta|
+    folded_path = OrderedDict()
+    start_x, start_y = port_L4.options.pos_x, port_L4.options.pos_y
+    current_x, current_y = start_x, start_y
+    current_x += l0
+    folded_path[0] = (current_x, current_y)
+    path_index = 1
+    for k in range(n):
+        if alpha[k] == 1:
+            current_y += a
+        if beta == 1:
+            current_y += c
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            current_x += -b
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            current_y += d
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            current_x += 3*b
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            current_y += -d
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            current_x += -b
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            current_y += -c
+            if lamb[k] == 1:
+                folded_path[path_index] = (current_x, current_y)
+                path_index += 1
+                current_x += b
+        if gamma[k] == 1:
+            current_y += -a
+        if delta[k] == 1:
+            current_y += -c
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            current_x += -b
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            current_y += -d
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            current_x += 3*b
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            current_y += d
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            current_x += -b
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            current_y += c
+        if epsilon[k] == 1:
+            current_y += 2*a
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+        if xi[k] == 1:
+            current_x += b
+        if mu[k] == 1:
+            current_x += b
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+        if eta[k] == 1:
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            current_y += -2*a
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+        if theta[k] == 1:
+            current_x += b
+            folded_path[path_index] = (current_x, current_y)
+            path_index += 1
+            current_y += a
+        folded_path[path_index] = (current_x, current_y)
+        
+    return folded_path
+
 
 
 # =====================================================================
