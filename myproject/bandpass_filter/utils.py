@@ -514,6 +514,7 @@ def print_solution(sol, p, r):
 def generate_meander_points(start_x, start_y, n, alpha, beta, gamma, delta, epsilon, lamb, zeta, mu, eta, theta, a, b, c, d, l0):
     # 0=alpha, 1=beta, 2=gamma, 3=delta, 4=epsilon, 5=lambda,
     # 6=zeta, 7=mu, 8=eta, 9=theta_, 10=theta|
+    from collections import OrderedDict
     folded_path = OrderedDict()
     current_x, current_y = start_x, start_y
     current_x += l0
@@ -521,8 +522,9 @@ def generate_meander_points(start_x, start_y, n, alpha, beta, gamma, delta, epsi
     path_index = 1
     for k in range(n):
         if alpha[k] == 1:
-            current_y += a
-        if beta == 1:
+            current_y += a / 2.0  # W[0] = a/2
+            
+        if beta[k] == 1:          # 修正: beta -> beta[k]
             current_y += c
             folded_path[path_index] = (current_x, current_y)
             path_index += 1
@@ -542,12 +544,16 @@ def generate_meander_points(start_x, start_y, n, alpha, beta, gamma, delta, epsi
             folded_path[path_index] = (current_x, current_y)
             path_index += 1
             current_y += -c
+            
+            # lamb 取代 gamma, delta, epsilon
             if lamb[k] == 1:
                 folded_path[path_index] = (current_x, current_y)
                 path_index += 1
                 current_x += b
+                
         if gamma[k] == 1:
             current_y += -a
+            
         if delta[k] == 1:
             current_y += -c
             folded_path[path_index] = (current_x, current_y)
@@ -568,27 +574,33 @@ def generate_meander_points(start_x, start_y, n, alpha, beta, gamma, delta, epsi
             folded_path[path_index] = (current_x, current_y)
             path_index += 1
             current_y += c
+            
         if epsilon[k] == 1:
-            current_y += 2*a
+            current_y += a        # 修正: 2*a -> a
             folded_path[path_index] = (current_x, current_y)
             path_index += 1
+            
         if zeta[k] == 1:
             current_x += b
+            
         if mu[k] == 1:
             current_x += b
             folded_path[path_index] = (current_x, current_y)
             path_index += 1
+            
         if eta[k] == 1:
             folded_path[path_index] = (current_x, current_y)
             path_index += 1
-            current_y += -2*a
+            current_y += -a       # 修正: -2*a -> -a
             folded_path[path_index] = (current_x, current_y)
             path_index += 1
+            
         if theta[k] == 1:
             current_x += b
             folded_path[path_index] = (current_x, current_y)
             path_index += 1
-            current_y += a
+            current_y += a / 2.0  # 修正: a -> a/2
+            
         folded_path[path_index] = (current_x, current_y)
         
     return folded_path
