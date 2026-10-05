@@ -82,7 +82,7 @@ def get_xy_on_folded_path(folded_path, s):
         
 def is_correct_branches(M, p, a, b, c, d, l0, r):
     # 0=alpha, 1=beta, 2=gamma, 3=delta, 4=epsilon, 5=lambda,
-    # 6=xi, 7=mu, 8=eta, 9=theta_, 10=theta|
+    # 6=zeta, 7=mu, 8=eta, 9=theta_, 10=theta|
     n = M.shape[0]
     corner_fix = 2 * r - np.pi * r / 2
     
@@ -176,7 +176,7 @@ def build_M(n, ops):
     回傳: (是否合法, 矩陣 M, 每個操作對應的鉛直線格位清單 target_cells)
     """
     # 0=alpha, 1=beta, 2=gamma, 3=delta, 4=epsilon, 5=lambda,
-    # 6=xi, 7=mu, 8=eta, 9=theta_, 10=theta|
+    # 6=zeta, 7=mu, 8=eta, 9=theta_, 10=theta|
     M = np.ones((n, 11), dtype=int)
     M[:, 5] = 0  # lambda 初始為 0
     M[:, 7] = 0  # mu 初始為 0
@@ -286,7 +286,7 @@ def optimize_params_for_M(M, target_cells, p, L_target, S_target, r):
         [0,   5, 2, 2, 0, 0],  # 3: delta  = 5b + 2c + 2d
         [1.0, 0, 0, 0, 0, 0],  # 4: epsilon= a
         [0,   1, 0, 0, 0, 0],  # 5: lambda = b
-        [0,   1, 0, 0, 0, 0],  # 6: xi     = b
+        [0,   1, 0, 0, 0, 0],  # 6: zeta     = b
         [0,   1, 0, 0, 0, 0],  # 7: mu     = b
         [1.0, 0, 0, 0, 0, 0],  # 8: eta    = a
         [0,   1, 0, 0, 0, 0],  # 9: theta_ = b
@@ -511,11 +511,10 @@ def print_solution(sol, p, r):
     is_correct_branches(sol["M"], p, prm["a"], prm["b"], prm["c"], prm["d"], prm["l0"], r)
     print("=" * 60)
 
-def generate_meander_points(M, a, b, c, d, l0):
+def generate_meander_points(start_x, start_y, n, alpha, beta, gamma, delta, epsilon, lamb, zeta, mu, eta, theta, a, b, c, d, l0):
     # 0=alpha, 1=beta, 2=gamma, 3=delta, 4=epsilon, 5=lambda,
-    # 6=xi, 7=mu, 8=eta, 9=theta_, 10=theta|
+    # 6=zeta, 7=mu, 8=eta, 9=theta_, 10=theta|
     folded_path = OrderedDict()
-    start_x, start_y = port_L4.options.pos_x, port_L4.options.pos_y
     current_x, current_y = start_x, start_y
     current_x += l0
     folded_path[0] = (current_x, current_y)
@@ -573,7 +572,7 @@ def generate_meander_points(M, a, b, c, d, l0):
             current_y += 2*a
             folded_path[path_index] = (current_x, current_y)
             path_index += 1
-        if xi[k] == 1:
+        if zeta[k] == 1:
             current_x += b
         if mu[k] == 1:
             current_x += b
