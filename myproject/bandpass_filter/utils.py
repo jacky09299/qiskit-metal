@@ -114,31 +114,31 @@ def is_correct_branches(M, p, a, b, c, d, l0, r):
                     
                     # 修正 4: 檢查各操作的邊界條件與對應結構是否已刪除
                     if j == 0:  # m1(k+1)
-                        if M[k][5] != 0 or ("lambda", k) in used_deletions:
+                        if M[k][5] == 0 or ("lambda", k) in used_deletions:
                             return False
                         used_deletions.add(("lambda", k))
                         H_result.append(f"m1({k+1})")
                         
                     elif j == 2:  # m2(k+1)，需滿足 k >= 1 (1-based >= 2)
-                        if k == 0 or M[k-1][7] != 0 or ("mu", k-1) in used_deletions:
+                        if k == 0 or M[k-1][7] == 0 or ("mu", k-1) in used_deletions:
                             return False
                         used_deletions.add(("mu", k-1))
                         H_result.append(f"m2({k+1})")
                         
                     elif j == 4:  # m3(k+1)，需滿足 k <= n-2 (1-based <= n-1)
-                        if k == n - 1 or M[k][7] != 0 or ("mu", k) in used_deletions:
+                        if k == n - 1 or M[k][7] == 0 or ("mu", k) in used_deletions:
                             return False
                         used_deletions.add(("mu", k))
                         H_result.append(f"m3({k+1})")
                         
                     elif j == 8:  # m4(k+1)
-                        if M[k][5] != 0 or ("lambda", k) in used_deletions:
+                        if M[k][5] == 0 or ("lambda", k) in used_deletions:
                             return False
                         used_deletions.add(("lambda", k))
                         H_result.append(f"m4({k+1})")
                         
                     elif j == 10:  # m5(k+1)，需滿足 k <= n-2 (1-based <= n-1)
-                        if k == n - 1 or M[k+1][5] != 0 or ("lambda", k+1) in used_deletions:
+                        if k == n - 1 or M[k+1][5] == 0 or ("lambda", k+1) in used_deletions:
                             return False
                         used_deletions.add(("lambda", k+1))
                         H_result.append(f"m5({k+1})")
@@ -385,19 +385,83 @@ def solve_circuit(p, L_target, S_target, r, n_min=None, n_max=8):
     if n_min is None:
         n_min = max(1, (T + 1) // 2)
 
+    # =========================================================
+    # 效能優化 1：提早篩選不可能的 n_max，避免無謂的大量運算
+    # =========================================================
+    cf = 2 * r - np.pi * r / 2
+    eps = 1e-5
+    a_min = max(1e-3, 2 * cf + eps)
+    b_min = max(0.1, cf + eps)
+    c_min = 0.1
+    d_min = 0.3
+    l0_min = max(0.1, cf + eps)
+    ln1_min = max(0.1, cf + eps)
+
+    dynamic_n_max_S = int((S_target - l0_min - ln1_min) / (4 * b_min))
+    min_period_len = 4*a_min + 12*b_min + 4*c_min + 4*d_min
+    dynamic_n_max_L = int((L_target - l0_min - ln1_min + 2*cf) / min_period_len)
+    
+    n_max = min(n_max, dynamic_n_max_S, dynamic_n_max_L)
+    print(f"動態計算的 n_max 上限為: {n_max}")
+
+    # =========================================================
+    # 效能優化 2：預先計算最小可能長度，供加速篩選 (Pruning)
+    # =========================================================
+    W_min = np.array([
+        a_min / 2, 5 * b_min + 2 * c_min + 2 * d_min, a_min, 5 * b_min + 2 * c_min + 2 * d_min, a_min,
+        b_min, b_min, b_min, a_min, b_min, a_min / 2
+    ])
+    K = np.array([0, 6, 0, 6, 1, 1, 0, 1, 2, 1, 0])
+    eff_W_min = W_min - cf * K
+
     best_b = -1.0
     best_sol = None
 
     for n in range(n_min, n_max + 1):
         valid_candidates = generate_valid_ops(n, T)
         for ops, M, target_cells in valid_candidates:
+            
+            # --- 快速過濾 (Pruning)：如果最小長度條件都無法滿足，就跳過耗時的 LP ---
+            possible = True
+            for pt, (tk, tj) in zip(p, target_cells):
+                # 預估從起點到 (tk, tj) 的最小可能長度
+                start_len = l0_min - cf
+                for k in range(n):
+                    for j in range(11):
+                        if k == tk and j == tj:
+                            break
+                        if M[k, j] == 1:
+                            start_len += eff_W_min[j]
+                    if k == tk:
+                        break
+                
+                if start_len > pt:
+                    possible = False
+                    break
+                
+                # 預估從 (tk, tj) 到終點的最小可能長度
+                after_len = ln1_min - cf
+                for k in range(tk, n):
+                    start_j = tj + 1 if k == tk else 0
+                    for j in range(start_j, 11):
+                        if M[k, j] == 1:
+                            after_len += eff_W_min[j]
+                            
+                if pt + after_len > L_target:
+                    possible = False
+                    break
+
+            if False:
+                continue
+            # -------------------------------------------------------------------
+
             ok, params = optimize_params_for_M(M, target_cells, p, L_target, S_target, r)
             if not ok:
                 continue
 
             a, b, c, d, l0, ln_1 = params
             if b > best_b:
-                # 雙重確認：丟回你寫的兩個驗證函式進行最終核對
+                # 雙重確認：丟回兩個驗證函式進行最終核對
                 if is_correct_branches(M, p, a, b, c, d, l0, r):
                     L_out, S_out = is_correct_length(M, a, b, c, d, l0, ln_1, r)
                     if np.isclose(L_out, L_target, atol=1e-4) and np.isclose(S_out, S_target, atol=1e-4):
@@ -442,7 +506,7 @@ def print_solution(sol, p, r):
         print(f"  {name:8s} = {arr}")
     print("-" * 60)
     print("• 分岔點落點明細驗證：")
-    is_correct_branches(sol["M"], p, prm["a"], prm["b"], prm["c"], prm["d"], prm["l0"], r, verbose=True)
+    is_correct_branches(sol["M"], p, prm["a"], prm["b"], prm["c"], prm["d"], prm["l0"], r)
     print("=" * 60)
 
 
@@ -451,10 +515,10 @@ def print_solution(sol, p, r):
 # =====================================================================
 if __name__ == "__main__":
     # 👇 請在這裡填入你的測試數據：
-    r = 0.017                 # 轉角圓弧半徑 Fillet R
-    p = [7.97377, 7.97377+9.15059]        # 分岔點陣列 P (長度為 T)
-    L_target = 43.8      # 目標總路徑長 L
-    S_target = 5.5       # 目標水平總跨距 S
+    r = 0.017                     # 轉角圓弧半徑 Fillet R
+    p = [7.97377, 7.97377+9.15059, 7.97377+9.15059+9.35664, 7.97377+9.15059+9.35664+9.15059]     # 3 個分岔點的累積路徑長 P
+    L_target = 43.8              # 目標總路徑長 L
+    S_target = 5.5               # 目標水平總跨距 S
 
     # 執行求解 (n_max 可依你的電路週期上限自由調整)
     solution = solve_circuit(p, L_target, S_target, r, n_min=2, n_max=60)
