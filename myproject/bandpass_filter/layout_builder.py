@@ -407,7 +407,7 @@ def build_Lshapecpw(design, config, folded_path, start_x, start_y,s_pre, length_
             if idx == 4: break
             components.LShapedCPW(design, f"cpw_p{idx}",
                 start_x, start_y,
-                total_length=length_p[idx],folded_path=folded_path, s=s_val, downlimit = a/2+c+d+0.2,a=a, b=b, c=c)
+                total_length=length_p[idx],folded_path=folded_path, s=s_val, downlimit = a/2+c+d+0.3,a=a, b=b, c=c)
 
 def build_coupling_pad(design, config, folded_path, n_folds, folded_TL):
     if 'Q1' in design.components: Q1 = design.components['Q1']
