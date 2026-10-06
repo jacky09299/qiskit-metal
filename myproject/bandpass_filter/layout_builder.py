@@ -325,7 +325,7 @@ def build_bias_lines(design, config):
                 pin_inputs = Dict(start_pin = Dict(component = 'port_R2', pin = 'tie'),
                                     end_pin = Dict(component = 'cl_q_stg_3', pin = 'short'))))
 
-def build_folded_tl(design, config):
+def build_folded_tl(design, config, L_target, S_target, p, r):
     if 'port_L4' in design.components: port_L4 = design.components['port_L4']
     if 'port_R4' in design.components: port_R4 = design.components['port_R4']
     find_bc_solutions = utils.find_bc_solutions
@@ -334,10 +334,26 @@ def build_folded_tl(design, config):
     """
 
     if config.draw_folded_TL:
-        L_target = 43.8
-        S_target = 5.5
-        r = config.cpw_width/2 + config.cpw_gap + 0.006
-        solution = solve_circuit(p, L_target, S_target, r, n_min=2, n_max=60)
+        """
+        alpha    = [1, 0, 1, 0, 1, 1, 1, 1]
+        beta     = [1, 1, 1, 1, 1, 1, 1, 1]
+        gamma    = [1, 1, 1, 1, 0, 1, 0, 1]
+        delta    = [1, 1, 1, 1, 0, 1, 0, 1]
+        epsilon  = [1, 1, 1, 1, 0, 1, 0, 1]
+        zeta     = [1, 1, 1, 1, 1, 1, 1, 1]
+        eta      = [0, 1, 0, 1, 1, 1, 1, 1]
+        theta    = [0, 1, 0, 1, 1, 1, 1, 1]
+        lamb     = [0, 0, 0, 0, 1, 0, 1, 0]
+        mu       = [1, 0, 1, 0, 0, 0, 0, 0]
+        a = 0.853988
+        c = 0.100000
+        d = 0.300000
+        l0 = 0.959625
+        ln_1 = 0.291181
+        b = 0.132787
+        n = 8
+        """
+        solution = utils.solve_circuit(p, L_target, S_target, r, n_min=2, n_max=60)
         prm = solution["params"]
         a, b, c, d, l0 = prm["a"], prm["b"], prm["c"], prm["d"], prm["l0"]
         n = solution["n"]
@@ -350,14 +366,15 @@ def build_folded_tl(design, config):
         delta   = arrs["delta"]
         epsilon = arrs["epsilon"]
         lamb    = arrs["lambda"]
-        zeta      = arrs["zeta"]     # 💡 注意：你在 matrix_to_ten_arrays 裡叫
-  zeta，但在畫圖時叫 xi
+        zeta      = arrs["zeta"]
         mu      = arrs["mu"]
         eta     = arrs["eta"]
         theta   = arrs["theta"]
+        
         start_x, start_y = port_L4.options.pos_x, port_L4.options.pos_y
-        folded_path = self.generate_meander_points(start_x, start_y, n, alpha, beta, gamma, delta, epsilon, lamb, zeta, mu, eta, theta, a, b, c, d, l0)
-
+        folded_path = utils.generate_meander_points(start_x, start_y, n, alpha, beta, gamma, delta, epsilon, lamb, zeta, mu, eta, theta, a, b, c, d, l0)
+        
+        folded_TL_width, folded_TL_gap = config.cpw_width, config.cpw_gap
         # 使用 RoutePathfinder 來避免 RouteAnchors 的自動連接限制
         folded_TL = RouteAnchors(
             design, 'folded_TL',
@@ -369,7 +386,7 @@ def build_folded_tl(design, config):
                 anchors = folded_path,
                 trace_width = folded_TL_width,
                 trace_gap = folded_TL_gap,
-                fillet = config.cpw_width/2 + config.cpw_gap + 0.006,
+                fillet = r,
                 hfss_wire_bonds = True,
                 lead = dict(start_straight=0.100, end_straight=0.100)
             )
@@ -377,7 +394,7 @@ def build_folded_tl(design, config):
         actual_length = folded_TL.length
         print(f"元件計算後的實際長度是: {actual_length} mm")
 
-    return folded_path, start_x, start_y, n_folds, folded_TL
+    return folded_path, start_x, start_y, n, folded_TL
 
 def build_Lshapecpw(design, config, folded_path, start_x, start_y):
     # 參數設定
