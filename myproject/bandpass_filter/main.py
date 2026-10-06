@@ -25,12 +25,15 @@ def main():
     r = config.cpw_width/2 + config.cpw_gap + 0.006                     # 轉角圓弧半徑 Fillet R
     p = [8.65257, 8.65257+9.56369, 8.65257+9.56369+9.69128, 8.65257+9.56369+9.69128+9.69128, 8.65257+9.56369+9.69128+9.69128+9.56369]     # 分岔點的累積路徑長 P
     L_target = 8.65257 + 9.56369 + 9.69128 + 9.69128 + 9.56369 + 8.65257              # 目標總路徑長 L
-    S_target = 5.8               # 目標水平總跨距 S
     layout_builder.build_ports(design, config)
     layout_builder.build_transmission_lines(design, config)
     layout_builder.build_qubits(design, config)
     layout_builder.build_resonators(design, config)
     layout_builder.build_bias_lines(design, config)
+    if 'port_L4' in design.components: port_L4 = design.components['port_L4']
+    if 'port_R4' in design.components: port_R4 = design.components['port_R4']
+    S_target = abs(port_R4.pins['tie']['middle'][0] - port_L4.pins['tie']['middle'][0])  # 目標水平總跨距 S
+    print("S_target: ", S_target)
     folded_path, start_x, start_y, n_folds, folded_TL = layout_builder.build_folded_tl(design, config, L_target, S_target, p, r)
     print(start_x,start_y)
     #layout_builder.build_Lshapecpw(design, config, folded_path, start_x, start_y)
