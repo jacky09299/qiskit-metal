@@ -329,7 +329,6 @@ def build_bias_lines(design, config):
 def build_folded_tl(design, config, L_target, S_target, p, r, solution):
     if 'port_L4' in design.components: port_L4 = design.components['port_L4']
     if 'port_R4' in design.components: port_R4 = design.components['port_R4']
-    find_bc_solutions = utils.find_bc_solutions
     """
     Add folded transmission line between bottom ports (port_L4 and port_R4)
     """
