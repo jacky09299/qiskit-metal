@@ -24,10 +24,12 @@ class LShapedCPW:
                  total_length,
                  trace_width=config.cpw_width, trace_gap=config.cpw_gap, fillet=None,
                  trace_type=None,
-                 folded_path=None, s=None, downlimit=1.1,b):
+                 folded_path=None, s=None, downlimit=1.1,a=0.1,b=0.1,c=0.1):
         self.design = design
         self.name = name
-        (self.start_x, self.start_y), self.tag = utils.get_xy_on_folded_path(folded_path, s)
+        if 'port_L4' in design.components: port_L4 = design.components['port_L4']
+        if 'port_R4' in design.components: port_R4 = design.components['port_R4']
+        (self.start_x, self.start_y), self.tag = utils.get_xy_on_folded_path(folded_path, s, r=config.cpw_width/2 + config.cpw_gap + 0.006, port_L4.pins['tie']['middle'][0], port_L4.pins['tie']['middle'][1], port_R4.pins['tie']['middle'][0], port_R4.pins['tie']['middle'][1],a,c)
         self.total = total_length
         self.start_component = self.design.components['folded_TL'].name
         self.trace_width = trace_width
