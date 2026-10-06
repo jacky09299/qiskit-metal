@@ -391,6 +391,7 @@ def build_Lshapecpw(design, config, folded_path, start_x, start_y,s_pre, length_
         port_L4 = design.components['port_L4']
         port_R4 = design.components['port_R4']
         for idx, s_val in enumerate(s_list):
+            """
             # 取得岔出點座標
             (branch_x, branch_y), tag = utils.get_xy_on_folded_path(
                 folded_path, s_val, 
@@ -401,11 +402,12 @@ def build_Lshapecpw(design, config, folded_path, start_x, start_y,s_pre, length_
             )
             # 印出座標供檢查，避免 Rectangle 元件造成的 bounding box 衝突
             print(f"岔出點 cpw_p{idx} 預計位置: x = {branch_x:.5f}, y = {branch_y:.5f}, tag = {tag}")
-            
+            """
             # 暫時註解掉原本的 LShapedCPW
-            # components.LShapedCPW(design, f"cpw_p{idx}",
-            #     start_x, start_y,
-            #     total_length=length_p[idx],folded_path=folded_path, s=s_val, downlimit = a/2+c+d+0.2,a=a, b=b, c=c)
+            if idx == 4: break
+            components.LShapedCPW(design, f"cpw_p{idx}",
+                start_x, start_y,
+                total_length=length_p[idx],folded_path=folded_path, s=s_val, downlimit = a/2+c+d+0.2,a=a, b=b, c=c)
 
 def build_coupling_pad(design, config, folded_path, n_folds, folded_TL):
     if 'Q1' in design.components: Q1 = design.components['Q1']
