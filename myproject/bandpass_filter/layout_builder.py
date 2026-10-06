@@ -1,4 +1,5 @@
 import numpy as np
+import json
 from collections import OrderedDict
 from qiskit_metal import Dict
 from qiskit_metal.toolbox_metal.parsing import parse_value
@@ -325,7 +326,7 @@ def build_bias_lines(design, config):
                 pin_inputs = Dict(start_pin = Dict(component = 'port_R2', pin = 'tie'),
                                     end_pin = Dict(component = 'cl_q_stg_3', pin = 'short'))))
 
-def build_folded_tl(design, config, L_target, S_target, p, r):
+def build_folded_tl(design, config, L_target, S_target, p, r, solution):
     if 'port_L4' in design.components: port_L4 = design.components['port_L4']
     if 'port_R4' in design.components: port_R4 = design.components['port_R4']
     find_bc_solutions = utils.find_bc_solutions
@@ -334,27 +335,9 @@ def build_folded_tl(design, config, L_target, S_target, p, r):
     """
 
     if config.draw_folded_TL:
-        """
-        alpha    = [1, 0, 1, 0, 1, 1, 1, 1]
-        beta     = [1, 1, 1, 1, 1, 1, 1, 1]
-        gamma    = [1, 1, 1, 1, 0, 1, 0, 1]
-        delta    = [1, 1, 1, 1, 0, 1, 0, 1]
-        epsilon  = [1, 1, 1, 1, 0, 1, 0, 1]
-        zeta     = [1, 1, 1, 1, 1, 1, 1, 1]
-        eta      = [0, 1, 0, 1, 1, 1, 1, 1]
-        theta    = [0, 1, 0, 1, 1, 1, 1, 1]
-        lamb     = [0, 0, 0, 0, 1, 0, 1, 0]
-        mu       = [1, 0, 1, 0, 0, 0, 0, 0]
-        a = 0.853988
-        c = 0.100000
-        d = 0.300000
-        l0 = 0.959625
-        ln_1 = 0.291181
-        b = 0.132787
-        n = 8
-        """
-        solution = utils.solve_circuit(p, L_target, S_target, r, n_min=2, n_max=60)
-        utils.print_solution(solution, p, r)
+        if solution==None:
+            solution = utils.solve_circuit(p, L_target, S_target, r, n_min=2, n_max=60)
+            utils.print_solution(solution, p, r)
         prm = solution["params"]
         a, b, c, d, l0 = prm["a"], prm["b"], prm["c"], prm["d"], prm["l0"]
         n = solution["n"]
@@ -396,48 +379,21 @@ def build_folded_tl(design, config, L_target, S_target, p, r):
         actual_length = folded_TL.length
         print(f"元件計算後的實際長度是: {actual_length} mm")
 
-    return folded_path, start_x, start_y, n, folded_TL
+    return folded_path, start_x, start_y, n, folded_TL, solution
 
-def build_Lshapecpw(design, config, folded_path, start_x, start_y):
+def build_Lshapecpw(design, config, folded_path, start_x, start_y,s_pre, length_p,solution):
     # 參數設定
-    #s_pre = [0.0, 7.97377, 9.15059, 9.35664, 9.15059, 7.97377]
-    #s_pre = [0.0, 8.59091, 9.51299, 9.61708, 9.51299, 8.59091]
-    #s_pre = [0.0, 7.33072, 8.67702, 9.01229, 8.67702, 7.33072]
-    #s_pre = [0.0, 7.97125, 9.14771, 9.35369, 9.14771, 7.97125]
-    #s_pre = [0.0, 8.95833, 10.362, 10.6312, 10.362, 8.95833]
-    #s_pre = [0.0, 8.12347, 9.15059, 9.35664, 9.15059, 7.97377]
-    #s_pre = [0.0, 10600.2, 12410.7, 12809.3, 12410.7, 10600.2]
-    #s_pre = [0.0, 7842.05, 8999.45, 9202.1, 8999.45, 7842.05]
-    #s_pre = [0.0, 8386.57, 9215.64, 8386.57]
-    #s_pre = [0.0, 7783.55, 9050.3, 9351.59, 9351.59, 9050.3, 7783.55]
-    #s_pre = [0.0, 7973.77, 9150.59, 9356.64, 9150.59, 7973.77]
-    #s_pre = [0.0, 7973.77, 8000, 8700, 7973.77]
-    s_pre = [0.0, 7973.77, 9150.59, 9356.64, 9150.59, 7973.77]
-    s_pre = [x / 1000 for x in s_pre]
-
     s_list = [sum(s_pre[:i+1]) for i in range(len(s_pre))]
     print("s_list:", s_list)
+    prm = solution["params"]
+    a, b, c, d, l0 = prm["a"], prm["b"], prm["c"], prm["d"], prm["l0"]
 
-    #s_list =[0.1, 0.65, 19.48473, 31, 40.45, 49.71576]
-    #length_p = [1.81047, 0.477466, 0.262704, 0.262704, 0.477466, 1.81047]  # 每段的长度
-    #length_p = [1.18509, 0.236079, 0.130899, 0.130899, 0.236079, 1.18509] 
-    #length_p = [2.56819, 0.817071, 0.441439, 0.441439, 0.817071, 2.56819] 
-    #length_p = [1.8099, 0.477316, 0.262621, 0.262621, 0.477316, 1.8099] 
-    #length_p = [2.26791, 0.629384, 0.34518, 0.34518, 0.629384, 2.26791] 
-    #length_p = [1.81047, 0.477466, 0.262704, 0.262704, 0.477466, 1.81047]
-    #length_p = [1780.57, 469.58, 258.365, 258.365, 469.58, 1780.57]
-    #length_p = [1342.21, 335.114, 335.114, 1342.21]
-    #length_p = [2034.73, 561.117, 286.154, 244.474, 286.154, 561.117, 2034.73]
-    #length_p = [1810.47, 477.466, 262.704, 262.704, 477.466, 1810.47]
-    #length_p = [1810.47, 477.466, 262.704, 477.466, 1810.47]
-    length_p = [1810.47, 477.466, 262.704, 262.704, 477.466, 1810.47]
-    length_p = [x / 1000 for x in length_p]
     if config.draw_folded_TL:
         for idx, s_val in enumerate(s_list):
             #if idx==3: continue
             components.LShapedCPW(design, f"cpw_p{idx}",
                 start_x, start_y,
-                total_length=length_p[idx],folded_path=folded_path, s=s_val)
+                total_length=length_p[idx],folded_path=folded_path, s=s_val, downlimit = a/2+c+d+0.2)
 
 def build_coupling_pad(design, config, folded_path, n_folds, folded_TL):
     if 'Q1' in design.components: Q1 = design.components['Q1']

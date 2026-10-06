@@ -24,7 +24,18 @@ def main():
     # ==========================================
     r = config.cpw_width/2 + config.cpw_gap + 0.006                     # 轉角圓弧半徑 Fillet R
     p = [8.65257, 8.65257+9.56369, 8.65257+9.56369+9.69128, 8.65257+9.56369+9.69128+9.69128, 8.65257+9.56369+9.69128+9.69128+9.56369]     # 分岔點的累積路徑長 P
+    s_pre = [8.65257, 9.56369, 9.69128, 9.69128, 9.56369, 8.65257]
     L_target = 8.65257 + 9.56369 + 9.69128 + 9.69128 + 9.56369 + 8.65257              # 目標總路徑長 L
+    length_p = [1810.47, 477.466, 262.704, 262.704, 477.466, 1810.47]
+    length_p = [x / 1000 for x in length_p]
+    import os
+    import json
+
+    if os.path.exists("best_solution1.json"):
+        with open("best_solution.json1", "r") as f:
+            solution = json.load(f)
+    else:
+        solution = None
     layout_builder.build_ports(design, config)
     layout_builder.build_transmission_lines(design, config)
     layout_builder.build_qubits(design, config)
@@ -34,9 +45,9 @@ def main():
     if 'port_R4' in design.components: port_R4 = design.components['port_R4']
     S_target = abs(port_R4.pins['tie']['middle'][0] - port_L4.pins['tie']['middle'][0])  # 目標水平總跨距 S
     print("S_target: ", S_target)
-    folded_path, start_x, start_y, n_folds, folded_TL = layout_builder.build_folded_tl(design, config, L_target, S_target, p, r)
+    folded_path, start_x, start_y, n_folds, folded_TL = layout_builder.build_folded_tl(design, config, L_target, S_target, p, r, solution)
     print(start_x,start_y)
-    #layout_builder.build_Lshapecpw(design, config, folded_path, start_x, start_y)
+    layout_builder.build_Lshapecpw(design, config, folded_path, start_x, start_y,s_pre, length_p, solution)
     #layout_builder.build_coupling_pad(design, config, folded_path, n_folds, folded_TL)
     layout_builder.build_markers(design, config)
 

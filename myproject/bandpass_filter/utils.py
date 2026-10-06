@@ -2,36 +2,8 @@ import numpy as np
 from scipy.optimize import linprog
 from collections import OrderedDict
 import config
-
-def find_bc_solutions(L, delta, max_n=100):
-    """
-    在 n = 1,2,...,max_n 範圍內搜尋 (b, c) 解。
-    條件：
-      n = (L - delta) / (2c) 為正整數
-      floor((L-b)/(2*(b+c))) == n  == (L-delta)/(2c)
-    回傳值：一個 list，每項為 (n, c, b_min, b_max)，
-      其中 b_min < b <= b_max。
-    """
-    solutions = []
-    for n in range(1, max_n+1):
-        # 計算 c
-        c = (L - delta) / (2 * n)
-        if c <= 0:
-            continue
-
-        # 計算 b 的不等式邊界
-        b_min = ((n+1)*delta - L) / (n*(2*n+3))  # 下界 (strict)
-        b_max = delta / (2*n+1)                  # 上界 (inclusive)
-
-        # 判斷是否有可行 b
-        if b_min < b_max and b_max>0.1:
-            solutions.append((n, c, b_min, b_max))
-            print(f"n={n}, c={c:.3f}, b_min={b_min:.3f}, b_max={b_max:.3f}")
-    return solutions
     
-    
-    
-def get_xy_on_folded_path(folded_path, s):
+def get_xy_on_folded_path(folded_path, s, r, start_x, start_y, end_x, end_y,a,c):
     """
     給定folded_path (OrderedDict, key為int, value為(x, y)) 和長度s (mm)，
     回傳走s後的(x, y)座標。
@@ -41,19 +13,15 @@ def get_xy_on_folded_path(folded_path, s):
     # 取得所有點
     points = list(folded_path.values())
     # 添加初始點
-    first_point = points[0]
-    zero_point = (first_point[0] -0.248, first_point[1])
+    zero_point = (start_x, start_y)
     points.insert(0, zero_point)
-
-    last_point = points[-1]
-    extra_point = (last_point[0] + 5, last_point[1])
-    points.append(extra_point)
+    end_point = (end_x, end_y)
+    points.append(end_point)
 
     # 計算每段長度
     seg_lens = [np.hypot(points[i+1][0]-points[i][0], points[i+1][1]-points[i][1]) for i in range(len(points)-1)]
     # 扣掉轉角補償
-    a = config.cpw_width # 轉角半徑
-    seg_lens = [seg_lens[0] + (-1 + np.pi/2) * a] + [s + (-2 + np.pi/2) * a for s in seg_lens[1:]]
+    seg_lens = [seg_lens[0] + (-1 + np.pi/2) * r] + [s + (-2 + np.pi/2) * r for s in seg_lens[1:-1]]+ [seg_lens[-1] - r]
 
     if s == 0:
         return points[0], -1
@@ -62,9 +30,10 @@ def get_xy_on_folded_path(folded_path, s):
     for i, seg_len in enumerate(seg_lens):
         if total + seg_len >= s:
             # 在這一段內
-            remain = s - total + a
+            remain = s - total + r
             x0, y0 = points[i]
             x1, y1 = points[i+1]
+            raw_len = np.hypot(x1 - x0, y1 - y0)
             ratio = remain / seg_len if seg_len != 0 else 0
             x = x0 + (x1 - x0) * ratio
             y = y0 + (y1 - y0) * ratio
@@ -73,8 +42,10 @@ def get_xy_on_folded_path(folded_path, s):
                 tag = -1
             elif i == len(seg_lens) - 1:
                 tag = 5
-            else:
-                tag = (i - 1) % 5
+            elif np.isclose(raw_len, a+c):
+                tag =4 #向右L型
+            elif np.isclose(raw_len, a+2*c) or np.isclose(raw_len, a):
+                tag =2 #向左L型
             return (x, y), tag
 
         total += seg_len
@@ -355,8 +326,8 @@ def optimize_params_for_M(M, target_cells, p, L_target, S_target, r):
         (max(0.1, cf + eps), None),       # b >= 0.1
         (0.1, None),                      # c >= 0.1
         (0.3, None),                      # d >= 0.3
-        (max(0.1, cf + eps), None),       # l0 >= 0.1
-        (max(0.1, cf + eps), None)        # ln_1 >= 0.1
+        (max(0.2, cf + eps), None),       # l0 >= 0.2
+        (max(0.2, cf + eps), None)        # ln_1 >= 0.2
     ]
 
     res = linprog(c_obj, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs")
@@ -403,8 +374,8 @@ def solve_circuit(p, L_target, S_target, r, n_min=None, n_max=8):
     b_min = max(0.1, cf + eps)
     c_min = 0.1
     d_min = 0.3
-    l0_min = max(0.1, cf + eps)
-    ln1_min = max(0.1, cf + eps)
+    l0_min = max(0.2, cf + eps)
+    ln1_min = max(0.2, cf + eps)
 
     dynamic_n_max_S = int((S_target - l0_min - ln1_min) / (4 * b_min))
     min_period_len = 4*a_min + 12*b_min + 4*c_min + 4*d_min
@@ -460,7 +431,7 @@ def solve_circuit(p, L_target, S_target, r, n_min=None, n_max=8):
                     possible = False
                     break
 
-            if False:
+            if not possible:
                 continue
             # -------------------------------------------------------------------
 
@@ -487,6 +458,27 @@ def solve_circuit(p, L_target, S_target, r, n_min=None, n_max=8):
                             "L_out": L_out,
                             "S_out": S_out
                         }
+                        
+                        # 每當找到更優解時，即時寫入 best_solution.json，並印出提示
+                        import json
+                        try:
+                            serializable_sol = {
+                                "n": int(n),
+                                "b": float(b),
+                                "params": {k: float(v) for k, v in best_sol["params"].items()},
+                                "H_require": best_sol["H_require"],
+                                "H_result": best_sol["H_result"],
+                                "M": best_sol["M"].tolist() if isinstance(best_sol["M"], np.ndarray) else best_sol["M"],
+                                "ten_arrays": {k: (v.tolist() if isinstance(v, np.ndarray) else v) for k, v in best_sol["ten_arrays"].items()},
+                                "L_out": float(L_out),
+                                "S_out": float(S_out)
+                            }
+                            with open("best_solution.json", "w", encoding="utf-8") as f:
+                                json.dump(serializable_sol, f, indent=4, ensure_ascii=False)
+                            print(f"\n[系統提示] 已找到目前最優解 (b={b:.6f})，並暫存至 best_solution.json！")
+                            print(f"合法分岔！對應操作序列 H_result = {H_req}\n")
+                        except Exception as e:
+                            print(f"無法暫存 JSON: {e}")
 
     return best_sol
 

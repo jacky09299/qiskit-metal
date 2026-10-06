@@ -24,7 +24,7 @@ class LShapedCPW:
                  total_length,
                  trace_width=config.cpw_width, trace_gap=config.cpw_gap, fillet=None,
                  trace_type=None,
-                 folded_path=None, s=None):
+                 folded_path=None, s=None, downlimit=1.1):
         self.design = design
         self.name = name
         (self.start_x, self.start_y), self.tag = utils.get_xy_on_folded_path(folded_path, s)
@@ -36,6 +36,7 @@ class LShapedCPW:
         self.start_pin = "bottom"  # 默认起始 pin
         self.folded_path = folded_path
         self.s = s
+        self.downlimit = downlimit
 
         # 决定类型
         self.trace_type = trace_type or self._determine_type()
@@ -69,7 +70,7 @@ class LShapedCPW:
 
     def _build_initial_L(self):
         # 向下 self.vertical，再向右剩余
-        down = 0.85
+        down = self.downlimit
         #down = 1.6
         sx, sy = self.start_x, self.start_y
         if down > self.total:
