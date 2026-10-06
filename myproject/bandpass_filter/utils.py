@@ -232,9 +232,10 @@ def build_M(n, ops):
     return True, M, target_cells
 
 
-def generate_valid_ops(n, T):
+def generate_valid_ops(n, T, p=None):
     """
     產生所有長度為 T 且沿著路徑順序遞增的候選操作序列
+    使用 itertools.combinations 來極大化效能並避免記憶體爆炸
     """
     candidates = []
     for k in range(1, n + 1):
@@ -247,23 +248,29 @@ def generate_valid_ops(n, T):
         if k <= n - 1:
             candidates.append(("m5", k))
 
-    results = []
+    # 動態範圍過濾 (如果傳入 p)
+    if p is not None:
+        # 大略估計每個分岔點可能的 period 範圍
+        min_k = [max(1, int((pi - 8.0) / 10.0)) for pi in p]
+        max_k = [int((pi + 8.0) / 2.7) for pi in p]
+    else:
+        min_k = [1] * T
+        max_k = [n] * T
 
-    def dfs(start_idx, current_ops):
-        if len(current_ops) == T:
-            valid, M, target_cells = build_M(n, current_ops)
-            if valid:
-                results.append((list(current_ops), M, target_cells))
-            return
-
-        remaining_needed = T - len(current_ops)
-        for i in range(start_idx, len(candidates) - remaining_needed + 1):
-            current_ops.append(candidates[i])
-            dfs(i + 1, current_ops)
-            current_ops.pop()
-
-    dfs(0, [])
-    return results
+    import itertools
+    for ops in itertools.combinations(candidates, T):
+        valid_range = True
+        for i in range(T):
+            op_k = ops[i][1]
+            if op_k < min_k[i] or op_k > max_k[i]:
+                valid_range = False
+                break
+        if not valid_range:
+            continue
+            
+        valid, M, target_cells = build_M(n, ops)
+        if valid:
+            yield (list(ops), M, target_cells)
 
 
 # =====================================================================
@@ -420,7 +427,7 @@ def solve_circuit(p, L_target, S_target, r, n_min=None, n_max=8):
     best_sol = None
 
     for n in range(n_min, n_max + 1):
-        valid_candidates = generate_valid_ops(n, T)
+        valid_candidates = generate_valid_ops(n, T, p)
         for ops, M, target_cells in valid_candidates:
             
             # --- 快速過濾 (Pruning)：如果最小長度條件都無法滿足，就跳過耗時的 LP ---
