@@ -47,7 +47,7 @@ def main():
     print("S_target: ", S_target)
     folded_path, start_x, start_y, n_folds, folded_TL, solution = layout_builder.build_folded_tl(design, config, L_target, S_target, p, r, solution)
     print(start_x,start_y)
-    layout_builder.build_Lshapecpw(design, config, folded_path, start_x, start_y, s_pre, length_p, solution)
+    #layout_builder.build_Lshapecpw(design, config, folded_path, start_x, start_y, s_pre, length_p, solution)
     #layout_builder.build_coupling_pad(design, config, folded_path, n_folds, folded_TL)
     layout_builder.build_markers(design, config)
 

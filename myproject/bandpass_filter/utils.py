@@ -46,6 +46,9 @@ def get_xy_on_folded_path(folded_path, s, r, start_x, start_y, end_x, end_y,a,c)
                 tag =4 #向右L型
             elif np.isclose(raw_len, a+2*c) or np.isclose(raw_len, a):
                 tag =2 #向左L型
+            else:
+                print(f"Warning: raw_len={raw_len} does not match expected values (a={a}, c={c}). Using default tag=2.")
+                tag = 2
             return (x, y), tag
 
         total += seg_len
