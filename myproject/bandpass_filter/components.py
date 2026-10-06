@@ -155,7 +155,7 @@ class LShapedCPW:
 
     def _build_left_L(self):
         # 向左 0.05，再向下剩余
-        small = self.b
+        small = 1.5*self.b
         sx, sy = self.start_x, self.start_y
         if small > self.total:
             sx, sy = self.start_x, self.start_y
@@ -180,9 +180,9 @@ class LShapedCPW:
         self.start_pin = f"{self.name}_start"
 
         port4y = self.design.components['port_R4'].options.pos_y
-        if short_y < port4y - 0.6:
+        if short_y < port4y - self.downlimit:
             fold_x = mid_x
-            fold_y = port4y - 0.6
+            fold_y = port4y - self.downlimit
             short_x = fold_x + (self.total - (sx - mid_x +  mid_y-fold_y) + (2 - np.pi/2) * self.fillet*2)
             short_y = fold_y
 

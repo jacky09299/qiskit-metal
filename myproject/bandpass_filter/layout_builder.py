@@ -403,11 +403,17 @@ def build_Lshapecpw(design, config, folded_path, start_x, start_y,s_pre, length_
             # 印出座標供檢查，避免 Rectangle 元件造成的 bounding box 衝突
             print(f"岔出點 cpw_p{idx} 預計位置: x = {branch_x:.5f}, y = {branch_y:.5f}, tag = {tag}")
             """
-            # 暫時註解掉原本的 LShapedCPW
-            if idx == 4: break
+            
+            # 動態計算避開 Alignment mark 的安全 downlimit
+            min_down = a/2 + c + d + 0.2
+            y_target = -3.0 - min_down 
+            if -4.30 < y_target < -3.90:
+                y_target = -4.30
+            safe_downlimit = -3.0 - y_target
+
             components.LShapedCPW(design, f"cpw_p{idx}",
                 start_x, start_y,
-                total_length=length_p[idx],folded_path=folded_path, s=s_val, downlimit = a/2+c+d+0.3,a=a, b=b, c=c)
+                total_length=length_p[idx],folded_path=folded_path, s=s_val, downlimit=safe_downlimit, a=a, b=b, c=c)
 
 def build_coupling_pad(design, config, folded_path, n_folds, folded_TL):
     if 'Q1' in design.components: Q1 = design.components['Q1']

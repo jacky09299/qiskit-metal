@@ -41,6 +41,11 @@ def get_xy_on_folded_path(folded_path, s, r, start_x, start_y, end_x, end_y,a,c)
             if i == 0:
                 tag = -1
             elif i == len(seg_lens) - 1:
+                print("end_L",x,y,end_x,end_y)
+                if abs(x-end_x)<0.00001 and abs(y-end_y)<0.00001:
+                    x = end_x
+                    y = end_y
+                    print("end_L",x,y)
                 tag = 5
             elif np.isclose(raw_len, a+c):
                 tag =4 #向右L型
