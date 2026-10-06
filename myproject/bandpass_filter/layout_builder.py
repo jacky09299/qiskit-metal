@@ -354,6 +354,7 @@ def build_folded_tl(design, config, L_target, S_target, p, r):
         n = 8
         """
         solution = utils.solve_circuit(p, L_target, S_target, r, n_min=2, n_max=60)
+        utils.print_solution(solution, p, r)
         prm = solution["params"]
         a, b, c, d, l0 = prm["a"], prm["b"], prm["c"], prm["d"], prm["l0"]
         n = solution["n"]
@@ -371,7 +372,8 @@ def build_folded_tl(design, config, L_target, S_target, p, r):
         eta     = arrs["eta"]
         theta   = arrs["theta"]
         
-        start_x, start_y = port_L4.options.pos_x, port_L4.options.pos_y
+        # 從 port_L4 的 tie pin 取得實際出線位置，而不是元件的中心點 (pos_x, pos_y)
+        start_x, start_y = port_L4.pins['tie']['middle']
         folded_path = utils.generate_meander_points(start_x, start_y, n, alpha, beta, gamma, delta, epsilon, lamb, zeta, mu, eta, theta, a, b, c, d, l0)
         
         folded_TL_width, folded_TL_gap = config.cpw_width, config.cpw_gap
@@ -388,7 +390,7 @@ def build_folded_tl(design, config, L_target, S_target, p, r):
                 trace_gap = folded_TL_gap,
                 fillet = r,
                 hfss_wire_bonds = True,
-                lead = dict(start_straight=0.100, end_straight=0.100)
+                lead = dict(start_straight=0, end_straight=0)
             )
         )
         actual_length = folded_TL.length
