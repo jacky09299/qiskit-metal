@@ -298,6 +298,7 @@ def optimize_params_for_M(M, target_cells, p, L_target, S_target, r):
     b_ub.append(0.9 - eps)
 
     # 加入每個分岔點 pt 落在目標鉛直線格位 (tk, tj) 內的區間限制
+    branch_margin = 0.2  # 確保岔出點離轉角至少 0.2 mm
     for pt, (tk, tj) in zip(p, target_cells):
         coef_start = np.array([0.0, 0.0, 0.0, 0.0, 1.0, 0.0])  # 起點含 l0
         const_start = -cf
@@ -315,13 +316,13 @@ def optimize_params_for_M(M, target_cells, p, L_target, S_target, r):
         coef_end = coef_start + W_coef[tj]
         const_end = const_start - cf * K[tj]
 
-        # 條件 A: S_start + eps <= pt
+        # 條件 A: S_start + branch_margin <= pt
         A_ub.append(coef_start)
-        b_ub.append(pt - const_start - eps)
+        b_ub.append(pt - const_start - branch_margin)
 
-        # 條件 B: S_end - eps >= pt  (即 -S_end <= -pt - eps)
+        # 條件 B: S_end - branch_margin >= pt  (即 -S_end <= -pt - branch_margin)
         A_ub.append(-coef_end)
-        b_ub.append(-(pt - const_end + eps))
+        b_ub.append(-(pt - const_end + branch_margin))
 
     # 3. 參數下界限制 (規格書第 10 節，並確保扣掉圓弧後每段長度皆 > 0)
     bounds = [

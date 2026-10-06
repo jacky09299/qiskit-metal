@@ -31,7 +31,7 @@ def main():
     import os
     import json
 
-    if os.path.exists("best_solution2.json"):
+    if os.path.exists("best_solution23.json"):
         with open("best_solution2.json", "r") as f:
             solution = json.load(f)
     else:
@@ -86,6 +86,11 @@ def main():
     print("Before export")
     design.renderers.gds.export_to_gds(config.save_file_name)
     print(f"成功導出 GDS: {config.save_file_name}")
+    
+    # 保持 GUI 視窗開啟
+    print("開啟 GUI... (請手動關閉視窗以結束程式)")
+    gui.main_window.show()
+    gui.qApp.exec_()
 
 if __name__ == "__main__":
     main()
