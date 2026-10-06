@@ -98,7 +98,7 @@ class LShapedCPW:
 
     def _build_right_L(self):
         # 先向右 small，再向下 total-small
-        small = 1.5*b
+        small = 1.5*self.b
         #small = 0.14
         sx, sy = self.start_x, self.start_y
         if small > self.total:
