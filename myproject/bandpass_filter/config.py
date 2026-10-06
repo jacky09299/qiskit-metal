@@ -138,13 +138,40 @@ configs = {
         "draw_coupling_pad_2": False,
         "draw_couple_line_1": True,
         "draw_couple_line_2": False,
+    },
+    "onlyBPF": {
+        "draw_L1": False,
+        "draw_L2": False,
+        "draw_L3": False,
+        "draw_L4": True,
+        "draw_R1": False,
+        "draw_R2": False,
+        "draw_R3": False,
+        "draw_R4": True,
+        "reso_freq": 5,
+        "draw_TL_anchors": False,
+        "draw_pocket_1": False,
+        "draw_pocket_2": False,
+        "draw_qubit_1": False,
+        "draw_qubit_2": False,
+        "draw_reso_1": False,
+        "draw_reso_2": False,
+        "draw_fl_1": False,
+        "draw_fl_2": False,
+        "draw_cl_1": False,
+        "draw_cl_2": False,
+        "draw_folded_TL": True,
+        "draw_coupling_pad_1": False,
+        "draw_coupling_pad_2": False,
+        "draw_couple_line_1": False,
+        "draw_couple_line_2": False,
     }
 }    
 
 # In[3]:
 
 
-target_version = "4-2" 
+target_version = "onlyBPF" 
 data = configs[target_version]
 
 # 左邊(L)與右邊(R)結構

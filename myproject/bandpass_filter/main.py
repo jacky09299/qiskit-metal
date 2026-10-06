@@ -55,7 +55,7 @@ def main():
     print(start_x,start_y)
     layout_builder.build_Lshapecpw(design, config, folded_path, start_x, start_y, s_pre, length_p, solution)
     #layout_builder.build_coupling_pad(design, config, folded_path, n_folds, folded_TL)
-    layout_builder.build_markers(design, config)
+    #layout_builder.build_markers(design, config)
 
     # ==========================================
     # 3. 刷新 GUI 並截圖
@@ -83,8 +83,10 @@ def main():
     
     design.qgeometry.tables['junction']
 
+    #design.renderers.gds.options['precision'] = '1e-9'
     design.renderers.gds.options['precision'] = '1e-9'
-    design.renderers.gds.options['tolerance'] = '1e-7'
+    #design.renderers.gds.options['tolerance'] = '1e-7'
+    design.renderers.gds.options['tolerance'] = '1e-5'
     design.renderers.gds.options['max_points'] = '10000000'
     #design.renderers.gds.options['corners'] = 'circular bend'
     #design.renderers.gds.options['chord_error'] = '1um'
