@@ -31,8 +31,8 @@ def main():
     import os
     import json
 
-    if os.path.exists("best_solution1.json"):
-        with open("best_solution.json1", "r") as f:
+    if os.path.exists("best_solution2.json"):
+        with open("best_solution2.json", "r") as f:
             solution = json.load(f)
     else:
         solution = None
@@ -45,9 +45,9 @@ def main():
     if 'port_R4' in design.components: port_R4 = design.components['port_R4']
     S_target = abs(port_R4.pins['tie']['middle'][0] - port_L4.pins['tie']['middle'][0])  # 目標水平總跨距 S
     print("S_target: ", S_target)
-    folded_path, start_x, start_y, n_folds, folded_TL = layout_builder.build_folded_tl(design, config, L_target, S_target, p, r, solution)
+    folded_path, start_x, start_y, n_folds, folded_TL, solution = layout_builder.build_folded_tl(design, config, L_target, S_target, p, r, solution)
     print(start_x,start_y)
-    layout_builder.build_Lshapecpw(design, config, folded_path, start_x, start_y,s_pre, length_p, solution)
+    layout_builder.build_Lshapecpw(design, config, folded_path, start_x, start_y, s_pre, length_p, solution)
     #layout_builder.build_coupling_pad(design, config, folded_path, n_folds, folded_TL)
     layout_builder.build_markers(design, config)
 
