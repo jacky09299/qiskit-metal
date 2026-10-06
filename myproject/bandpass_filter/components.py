@@ -24,7 +24,7 @@ class LShapedCPW:
                  total_length,
                  trace_width=config.cpw_width, trace_gap=config.cpw_gap, fillet=None,
                  trace_type=None,
-                 folded_path=None, s=None, downlimit=1.1):
+                 folded_path=None, s=None, downlimit=1.1,b):
         self.design = design
         self.name = name
         (self.start_x, self.start_y), self.tag = utils.get_xy_on_folded_path(folded_path, s)
@@ -37,6 +37,7 @@ class LShapedCPW:
         self.folded_path = folded_path
         self.s = s
         self.downlimit = downlimit
+        self.b = b
 
         # 决定类型
         self.trace_type = trace_type or self._determine_type()
@@ -47,11 +48,6 @@ class LShapedCPW:
         getattr(self, f"_build_{self.trace_type}")()
 
     def _determine_type(self):
-                # tag=0: 上半部垂直線
-                # tag=1: 上橫線
-                # tag=2: 垂直線
-                # tag=3: 下橫線
-                # tag=4: 下半部垂直線
             print(f"Determining type based on tag: {self.tag}")
             if self.tag == 0:
                 return "right_L"
@@ -102,7 +98,7 @@ class LShapedCPW:
 
     def _build_right_L(self):
         # 先向右 small，再向下 total-small
-        small = 0.05
+        small = 1.5*b
         #small = 0.14
         sx, sy = self.start_x, self.start_y
         if small > self.total:
@@ -131,9 +127,9 @@ class LShapedCPW:
         # 判斷是否需要再折一次
         port4y = self.design.components['port_R4'].options.pos_y
         ######################################################################################
-        if short_y < port4y - 0.6:
+        if short_y < port4y - self.downlimit:
             fold_x = mid_x
-            fold_y = port4y - 0.6
+            fold_y = port4y - self.downlimit
             short_x = fold_x + (self.total - (mid_x - sx +  mid_y-fold_y) + (2 - np.pi/2) * self.fillet*2)
             short_y = fold_y
 
@@ -157,7 +153,7 @@ class LShapedCPW:
 
     def _build_left_L(self):
         # 向左 0.05，再向下剩余
-        small = 0.05
+        small = self.b
         sx, sy = self.start_x, self.start_y
         if small > self.total:
             sx, sy = self.start_x, self.start_y
@@ -237,7 +233,7 @@ class LShapedCPW:
         ))
 
     def _build_end_L(self):
-        down = 0.8
+        down = self.downlimit
         #down = 1.6
         sx, sy = self.start_x, self.start_y
         if down > self.total:
