@@ -517,7 +517,7 @@ def create_u_shape(design, cx, cy, name='u_shape', bl=0.3, sh=0.1, tw=0.01):
     u_shape.create(cx, cy)
     return u_shape
     
-    import numpy as np
+import numpy as np
 
 from collections import OrderedDict
 
