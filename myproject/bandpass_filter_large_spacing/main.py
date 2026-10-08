@@ -15,10 +15,10 @@ def main():
     gui = MetalGUI(design)
     design.overwrite_enabled = True
     design.chips.main.size.size_x = '10 mm'
-    design.chips.main.size.size_x = '8.8 mm'
-    #design.chips.main.size.size_y = '10 mm'
-    design.chips.main.size.size_y = '4 mm'#
-    design.chips.main.size.center_y = '-3 mm'#
+    #design.chips.main.size.size_x = '8.8 mm'
+    design.chips.main.size.size_y = '10 mm'
+    #design.chips.main.size.size_y = '4 mm'#
+    #design.chips.main.size.center_y = '-3 mm'#
     design.chips.main.size.size_z = '-650 um'
     design.chips.main.material = 'sapphire'
 
@@ -32,31 +32,22 @@ def main():
     length_p = [1133.57, 211.113, 104.681, 82.6346, 104.681, 211.113, 1133.57]
     
     # 自動計算其他所有需要的參數
-    segments = [x / 1000 for x in segments]   
-    L_target = sum(segments)       # 目標總路徑長 L
-    p = [sum(segments[:i+1]) for i in range(len(segments)-1)]                   # 內部求解演算法用的分岔點陣列 (不含 0 與終點)
-    s_pre = [0] + segments                                                      # 繪圖時使用的各段相對長度
-    length_p = [x / 1000 for x in length_p]                                     # 轉換單位
+    segments = [x / 1000 for x in segments]
+    length_p = [x / 1000 for x in length_p] # 轉換單位
     import os
     import json
-
-    if os.path.exists("best_solution3.json"):
-        with open("best_solution3.json", "r") as f:
-            solution = json.load(f)
-    else:
-        solution = None
+    
     layout_builder.build_ports(design, config)
-    layout_builder.build_transmission_lines(design, config)
-    layout_builder.build_qubits(design, config)
-    layout_builder.build_resonators(design, config)
-    layout_builder.build_bias_lines(design, config)
     if 'port_L4' in design.components: port_L4 = design.components['port_L4']
     if 'port_R4' in design.components: port_R4 = design.components['port_R4']
     S_target = abs(port_R4.pins['tie']['middle'][0] - port_L4.pins['tie']['middle'][0])  # 目標水平總跨距 S
     print("S_target: ", S_target)
     folded_path, start_x, start_y, n_folds, folded_TL, solution = layout_builder.build_folded_tl(design, config, L_target, S_target, p, r, solution)
-    print(start_x,start_y)
-    layout_builder.build_Lshapecpw(design, config, folded_path, start_x, start_y, s_pre, length_p, solution)
+    
+    layout_builder.build_transmission_lines(design, config)
+    layout_builder.build_qubits(design, config)
+    layout_builder.build_resonators(design, config)
+    layout_builder.build_bias_lines(design, config)
     #layout_builder.build_coupling_pad(design, config, folded_path, n_folds, folded_TL)
     #layout_builder.build_markers(design, config)
 
