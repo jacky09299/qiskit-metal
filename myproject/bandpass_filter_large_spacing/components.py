@@ -6,7 +6,7 @@ from qiskit_metal.qlibrary.tlines.anchored_path import RouteAnchors
 from qiskit_metal.qlibrary.terminations.short_to_ground import ShortToGround
 import config
 import utils
-
+'''
 class LShapedCPW:
     """
     通用的 L 型 CPW 走线类，支持以下六种类型：
@@ -291,7 +291,7 @@ class LShapedCPW:
                 lead = dict(start_straight=leading)
             )
         )
-
+'''
 
 class UShapeComponent:
     """
@@ -516,3 +516,749 @@ def create_u_shape(design, cx, cy, name='u_shape', bl=0.3, sh=0.1, tw=0.01):
     u_shape = UShapeComponent(design, name, bl, sh, tw)
     u_shape.create(cx, cy)
     return u_shape
+    
+    import numpy as np
+
+from collections import OrderedDict
+
+from qiskit_metal import QComponent
+
+from qiskit_metal.qlibrary.tlines.anchored_path import RouteAnchors
+from qiskit_metal.qlibrary.tlines.straight_path import RouteStraight
+
+
+class VirtualJunction(QComponent):
+    """
+    用來作為 TreeRoute 分岔點的隱形元件。
+
+    可以根據輸入動態產生任意數量的 pins，
+    讓 RouteAnchors / RouteStraight 附著。
+
+    本身不產生任何金屬圖形，只提供連接點。
+    """
+
+    default_options = dict(
+        # dict of:
+        # pin_name: {
+        #     'points': [[x1, y1], [x2, y2]],
+        #     'width': 10
+        # }
+        pins={}
+    )
+
+    def make(self):
+        for pin_name, pinfo in self.p.pins.items():
+
+            # input_as_norm=True:
+            #
+            # points[0] -> points[1] 的方向會被當成 normal
+            #
+            # 注意：
+            # 實際 middle 的定義依 Qiskit Metal add_pin()
+            # 的處理方式而定。
+            self.add_pin(
+                pin_name,
+                pinfo['points'],
+                pinfo['width'],
+                input_as_norm=True
+            )
+
+
+class TreeRoute:
+    """
+    將多個 RouteAnchors / RouteStraight
+    組合成樹狀結構的管理器。
+
+    功能：
+    --------------------------------------------------
+    1. 自動建立 VirtualJunction
+    2. 自動建立各段 route
+    3. 有 anchors -> RouteAnchors
+    4. 無 anchors -> RouteStraight
+    5. 支援任意層數的 branch
+    6. 提供 route / junction 存取
+    7. 提供總長度計算
+
+
+    tree_config 範例
+    --------------------------------------------------
+
+    {
+        'name': 'root',
+
+        'start_pin': {
+            'component': 'port1',
+            'pin': 'tie'
+        },
+
+        'anchors': OrderedDict({
+            1: [0, 1]
+        }),
+
+        'junction_coord': [0, 2],
+
+        'branches': [
+            {
+                'name': 'branchA',
+
+                'anchors': OrderedDict({
+                    1: [1, 2]
+                }),
+
+                'end_pin': {
+                    'component': 'short1',
+                    'pin': 'short'
+                }
+            },
+
+            {
+                'name': 'branchB',
+
+                'anchors': OrderedDict(),
+
+                'junction_coord': [-1, 3],
+
+                'branches': [
+                    ...
+                ]
+            }
+        ]
+    }
+
+
+    Route 選擇：
+    --------------------------------------------------
+
+    anchors != empty
+        -> RouteAnchors
+
+    anchors == empty
+        -> RouteStraight
+
+    這樣可以避免 RouteAnchors 在 anchors 為空時，
+    某些幾何條件造成：
+
+        np.concatenate([])
+
+    的錯誤。
+    """
+
+    def __init__(
+        self,
+        design,
+        name,
+        tree_config,
+        trace_width=config.cpw_width,
+        trace_gap=config.cpw_gap,
+        fillet='0',
+        lead_in='0mm',
+        lead_out='0mm'
+    ):
+
+        self.design = design
+        self.name = name
+        self.tree_config = tree_config
+
+        self.trace_width = trace_width
+        self.trace_gap = trace_gap
+
+        self.fillet = fillet
+
+        self.lead_in = lead_in
+        self.lead_out = lead_out
+
+        # 保存所有產生的：
+        #
+        # RouteAnchors
+        # RouteStraight
+        #
+        # 格式：
+        #
+        # {
+        #     'tree_root': instance,
+        #     'tree_branchA': instance,
+        #     ...
+        # }
+        self.routes = {}
+
+        # 保存所有 VirtualJunction
+        #
+        # {
+        #     'tree_root_junc': instance,
+        #     ...
+        # }
+        self.junctions = {}
+
+        # 建立整棵 routing tree
+        self._build_tree(self.tree_config)
+
+
+    # =========================================================
+    # Utility
+    # =========================================================
+
+    def _get_coord(self, pin_dict):
+        """
+        根據：
+
+        {
+            'component': component_name,
+            'pin': pin_name
+        }
+
+        取得 pin 的 middle coordinate。
+        """
+
+        comp = self.design.components[
+            pin_dict['component']
+        ]
+
+        return comp.pins[
+            pin_dict['pin']
+        ]['middle']
+
+
+    def _make_pin_points(
+        self,
+        jx,
+        jy,
+        toward_x,
+        toward_y,
+        step=0.01
+    ):
+        """
+        建立 VirtualJunction pin 所需的兩個點。
+
+        point 方向：
+
+            junction
+                |
+                |----> toward point
+
+
+        產生：
+
+            points[0] = junction
+
+            points[1] =
+                junction
+                + unit_vector * step
+
+
+        如果：
+
+            junction == toward point
+
+        則預設 normal 朝 +X。
+        """
+
+        dx = toward_x - jx
+        dy = toward_y - jy
+
+        mag = np.hypot(dx, dy)
+
+        if mag == 0:
+            ux = 1.0
+            uy = 0.0
+
+        else:
+            ux = dx / mag
+            uy = dy / mag
+
+        return [
+            [jx, jy],
+            [
+                jx + ux * step,
+                jy + uy * step
+            ]
+        ]
+
+
+    # =========================================================
+    # Tree Builder
+    # =========================================================
+
+    def _build_tree(
+        self,
+        node_config,
+        parent_pin=None
+    ):
+        """
+        遞迴建立 routing tree。
+        """
+
+        # -----------------------------------------------------
+        # Route name
+        # -----------------------------------------------------
+
+        node_name = node_config.get(
+            'name',
+            str(len(self.routes))
+        )
+
+        route_name = f"{self.name}_{node_name}"
+
+
+        # -----------------------------------------------------
+        # Start pin
+        # -----------------------------------------------------
+
+        start_pin = node_config.get(
+            'start_pin',
+            parent_pin
+        )
+
+
+        # -----------------------------------------------------
+        # Anchors
+        # -----------------------------------------------------
+
+        anchors_dict = node_config.get(
+            'anchors',
+            OrderedDict()
+        )
+
+        anchors = OrderedDict()
+
+        for k, v in anchors_dict.items():
+            anchors[k] = np.array(
+                v,
+                dtype=float
+            )
+
+
+        # -----------------------------------------------------
+        # End pin
+        # -----------------------------------------------------
+
+        end_pin = None
+
+
+        # =====================================================
+        # Case 1
+        #
+        # Leaf node：
+        # 已經有真正的 end_pin
+        # =====================================================
+
+        if 'end_pin' in node_config:
+
+            end_pin = node_config['end_pin']
+
+
+        # =====================================================
+        # Case 2
+        #
+        # Junction node
+        # =====================================================
+
+        elif 'junction_coord' in node_config:
+
+            jx, jy = node_config[
+                'junction_coord'
+            ]
+
+            j_name = f"{route_name}_junc"
+
+
+            # -------------------------------------------------
+            # 找 junction 的來源方向
+            # -------------------------------------------------
+
+            if len(anchors) > 0:
+
+                # 最後一個 anchor
+                prev_pt = list(
+                    anchors.values()
+                )[-1]
+
+            else:
+
+                # 沒有 anchor
+                # 直接看 start pin
+                prev_pt = self._get_coord(
+                    start_pin
+                )
+
+
+            # -------------------------------------------------
+            # Junction input pin
+            #
+            # normal 朝來源方向
+            # -------------------------------------------------
+
+            in_pts = self._make_pin_points(
+                jx,
+                jy,
+                prev_pt[0],
+                prev_pt[1]
+            )
+
+
+            pins_config = {
+
+                'in': {
+                    'points': in_pts,
+                    'width': self.trace_width
+                }
+
+            }
+
+
+            # -------------------------------------------------
+            # Branches
+            # -------------------------------------------------
+
+            branches = node_config.get(
+                'branches',
+                []
+            )
+
+
+            # -------------------------------------------------
+            # 建立所有 output pins
+            # -------------------------------------------------
+
+            for idx, branch in enumerate(
+                branches
+            ):
+
+                pin_name = f'out_{idx}'
+
+                b_anchors = branch.get(
+                    'anchors',
+                    OrderedDict()
+                )
+
+
+                # ---------------------------------------------
+                # Branch 有 anchor
+                # ---------------------------------------------
+
+                if len(b_anchors) > 0:
+
+                    next_pt = list(
+                        b_anchors.values()
+                    )[0]
+
+
+                # ---------------------------------------------
+                # Branch 無 anchor
+                # ---------------------------------------------
+
+                else:
+
+                    if 'end_pin' in branch:
+
+                        next_pt = self._get_coord(
+                            branch['end_pin']
+                        )
+
+                    elif 'junction_coord' in branch:
+
+                        next_pt = branch[
+                            'junction_coord'
+                        ]
+
+                    else:
+
+                        # fallback
+                        next_pt = [
+                            jx,
+                            jy - 1
+                        ]
+
+
+                # ---------------------------------------------
+                # Output pin normal 朝 branch 方向
+                # ---------------------------------------------
+
+                out_pts = self._make_pin_points(
+                    jx,
+                    jy,
+                    next_pt[0],
+                    next_pt[1]
+                )
+
+
+                pins_config[
+                    pin_name
+                ] = {
+
+                    'points': out_pts,
+
+                    'width':
+                        self.trace_width
+
+                }
+
+
+            # =================================================
+            # 建立 Virtual Junction
+            # =================================================
+
+            junction = VirtualJunction(
+                self.design,
+                j_name,
+                options=dict(
+                    pins=pins_config
+                )
+            )
+
+
+            self.junctions[
+                j_name
+            ] = junction
+
+
+            # -------------------------------------------------
+            # Parent route 的終點
+            # -------------------------------------------------
+
+            end_pin = {
+                'component': j_name,
+                'pin': 'in'
+            }
+
+
+        # =====================================================
+        # 建立目前這一段 Route
+        # =====================================================
+
+        if start_pin is not None and end_pin is not None:
+
+            # 所有 route 共用設定
+            common_options = dict(
+
+                pin_inputs=dict(
+
+                    start_pin=start_pin,
+
+                    end_pin=end_pin
+
+                ),
+
+                trace_width=self.trace_width,
+
+                trace_gap=self.trace_gap,
+
+                lead=dict(
+
+                    start_straight=self.lead_in,
+
+                    end_straight=self.lead_out
+
+                )
+            )
+
+
+            # =================================================
+            # 沒有 Anchors
+            #
+            # 使用 RouteStraight
+            # =================================================
+
+            if len(anchors) == 0:
+
+                route = RouteStraight(
+                    self.design,
+                    route_name,
+                    options=common_options
+                )
+
+
+            # =================================================
+            # 有 Anchors
+            #
+            # 使用 RouteAnchors
+            # =================================================
+
+            else:
+
+                route_options = dict(
+                    common_options
+                )
+
+                route_options.update(
+                    anchors=anchors,
+                    fillet=self.fillet
+                )
+
+                route = RouteAnchors(
+                    self.design,
+                    route_name,
+                    options=route_options
+                )
+
+
+            # 保存 route instance
+            self.routes[
+                route_name
+            ] = route
+
+
+        # =====================================================
+        # 建立 Child Routes
+        #
+        # 注意：
+        #
+        # 這裡刻意放在目前 route 建立完成之後。
+        #
+        # 順序：
+        #
+        # VirtualJunction
+        #       ↓
+        # Parent Route
+        #       ↓
+        # Child Routes
+        #
+        # dependency 比較清楚。
+        # =====================================================
+
+        if (
+            'junction_coord' in node_config
+            and 'end_pin' not in node_config
+        ):
+
+            j_name = f"{route_name}_junc"
+
+            branches = node_config.get(
+                'branches',
+                []
+            )
+
+            for idx, branch in enumerate(
+                branches
+            ):
+
+                child_start_pin = {
+
+                    'component':
+                        j_name,
+
+                    'pin':
+                        f'out_{idx}'
+
+                }
+
+                self._build_tree(
+                    branch,
+                    child_start_pin
+                )
+
+
+    # =========================================================
+    # Length
+    # =========================================================
+
+    def get_total_length(self):
+        """
+        計算所有 route 的幾何總長度。
+
+        包含：
+
+        - RouteAnchors
+        - RouteStraight
+
+        如果某個 route 尚未 build 或 length 無法讀取，
+        則跳過該 route。
+        """
+
+        total = 0.0
+
+        for route in self.routes.values():
+
+            try:
+
+                total += route.length
+
+            except Exception:
+
+                pass
+
+        return total
+
+
+    # =========================================================
+    # Route Access
+    # =========================================================
+
+    def get_route(self, name):
+        """
+        取得指定名稱的 route。
+
+        例如：
+
+            tree.get_route('branchA')
+
+        實際尋找：
+
+            <tree_name>_branchA
+
+        回傳可能為：
+
+            RouteAnchors
+
+        或：
+
+            RouteStraight
+        """
+
+        return self.routes.get(
+            f"{self.name}_{name}"
+        )
+
+
+    # =========================================================
+    # Junction Access
+    # =========================================================
+
+    def get_junction(self, name):
+        """
+        取得某個 node 所建立的 VirtualJunction。
+
+        例如：
+
+            tree.get_junction('root')
+
+        實際尋找：
+
+            <tree_name>_root_junc
+        """
+
+        return self.junctions.get(
+            f"{self.name}_{name}_junc"
+        )
+
+
+    # =========================================================
+    # Debug
+    # =========================================================
+
+    def print_routes(self):
+        """
+        印出所有 route 與實際使用的 route type。
+        """
+
+        print("TreeRoute routes:")
+        print("-" * 50)
+
+        for name, route in self.routes.items():
+
+            print(
+                f"{name}: "
+                f"{route.__class__.__name__}"
+            )
+
+
+    def print_junctions(self):
+        """
+        印出所有 VirtualJunction。
+        """
+
+        print("TreeRoute junctions:")
+        print("-" * 50)
+
+        for name in self.junctions:
+
+            print(name)
