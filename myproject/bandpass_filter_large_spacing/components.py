@@ -729,27 +729,15 @@ class TreeRoute:
         """
         建立 VirtualJunction pin 所需的兩個點。
 
-        point 方向：
+        In Qiskit Metal `QComponent.add_pin(..., input_as_norm=True)`:
+            points[1] is assigned as the pin's `middle` position,
+            and (points[1] - points[0]) / norm is assigned as the outward `normal` vector.
 
-            junction
-                |
-                |----> toward point
-
-
-        產生：
-
-            points[0] = junction
-
-            points[1] =
-                junction
-                + unit_vector * step
-
-
-        如果：
-
-            junction == toward point
-
-        則預設 normal 朝 +X。
+        For an output pin pointing towards (toward_x, toward_y):
+            - `middle` must be exactly [jx, jy].
+            - `normal` vector points towards (toward_x, toward_y).
+            - points[0] = [jx - ux * step, jy - uy * step]
+            - points[1] = [jx, jy]
         """
 
         dx = toward_x - jx
@@ -766,11 +754,11 @@ class TreeRoute:
             uy = dy / mag
 
         return [
-            [jx, jy],
             [
-                jx + ux * step,
-                jy + uy * step
-            ]
+                jx - ux * step,
+                jy - uy * step
+            ],
+            [jx, jy]
         ]
 
 

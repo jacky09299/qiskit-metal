@@ -1,6 +1,9 @@
 import qiskit_metal as metal
 from qiskit_metal import designs
-from qiskit_metal import MetalGUI
+try:
+    from qiskit_metal import MetalGUI
+except ImportError:
+    MetalGUI = None
 from qiskit_metal.qlibrary.terminations.open_to_ground import OpenToGround
 from qiskit_metal.qlibrary.terminations.short_to_ground import ShortToGround
 from collections import OrderedDict
@@ -10,7 +13,7 @@ from components import TreeRoute
 def run_test():
     # 建立設計與 GUI
     design = designs.DesignPlanar()
-    gui = MetalGUI(design)
+    gui = MetalGUI(design) if MetalGUI is not None else None
 
 
     # port1 在左邊，開口朝右 (orientation=180 → normal=[1,0])
@@ -65,8 +68,9 @@ def run_test():
     )
 
 
-    gui.rebuild()
-    gui.autoscale()
+    if gui:
+        gui.rebuild()
+        gui.autoscale()
 
 
     print("==== 測試結果 ====")
@@ -81,8 +85,9 @@ def run_test():
     print(f"總長度 = {my_tree.get_total_length():.4f} mm")
 
 
-    gui.main_window.show()
-    gui.qApp.exec_()
+    if gui and hasattr(gui, 'main_window') and gui.main_window:
+        gui.main_window.show()
+        gui.qApp.exec_()
 
 
 if __name__ == '__main__':
