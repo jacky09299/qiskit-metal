@@ -24,13 +24,13 @@ FILLET = '0um'
 ENABLE_GUI = os.environ.get('ENABLE_GUI', 'True').lower() == 'true'
 
 # Nodes coordinates from the meander sketch
-J1 = np.array([-8.75, -4.05])
+J1 = np.array([-8.75, -3])
 J2 = np.array([-6.60, -0.10])
 J3 = np.array([ 0.00,  3.20])
 J4 = np.array([-0.90, -2.80])
 J5 = np.array([ 0.90, -2.80])
 J6 = np.array([ 6.60, -0.10])
-J7 = np.array([ 8.75, -4.05])
+J7 = np.array([ 8.75, -3])
 
 Y_TOP = 3.20
 Y_UPPER_LOW = 0.90
@@ -110,7 +110,6 @@ def bottom_left_path():
         [-2.40, Y_BOTTOM_LOW],
         [-1.80, Y_BOTTOM_LOW],
         [-1.80, float(J4[1])],
-        [-1.20, float(J4[1])],
         J4.tolist()
     ]
 
@@ -119,8 +118,7 @@ def middle_left_path():
     """J4 -> J2: middle-left meander."""
     return [
         J4.tolist(),
-        [-1.30, float(J4[1])],
-        [-1.30, Y_MIDDLE_HIGH],
+        [float(J4[0]), Y_MIDDLE_HIGH],
         [-1.90, Y_MIDDLE_HIGH],
         [-1.90, Y_MIDDLE_LOW],
         [-2.50, Y_MIDDLE_LOW],
@@ -259,7 +257,7 @@ def create_launchpads(design):
         'left_launch',
         options=dict(
             pos_x='-9.0mm',
-            pos_y='-4.05mm',
+            pos_y='-3mm',
             orientation='0',
             trace_width=TRACE_WIDTH,
             trace_gap=TRACE_GAP,
@@ -276,7 +274,7 @@ def create_launchpads(design):
         'right_launch',
         options=dict(
             pos_x='9.0mm',
-            pos_y='-4.05mm',
+            pos_y='-3mm',
             orientation='180',
             trace_width=TRACE_WIDTH,
             trace_gap=TRACE_GAP,
@@ -306,24 +304,24 @@ def build_tree_config():
         {'name': 'j5_to_j7', 'path': bottom_right_path()},
 
         # 5 Ground routes connecting junctions J2..J6 to auto-created ShortToGround
-        {'name': 'ground_2', 'path': [J2.tolist(), [J2[0], J2[1] - 0.75]], 'end': 'short'},
-        {'name': 'ground_3', 'path': [J3.tolist(), [J3[0], J3[1] - 0.75]], 'end': 'short'},
-        {'name': 'ground_4', 'path': [J4.tolist(), [J4[0], J4[1] - 0.75]], 'end': 'short'},
-        {'name': 'ground_5', 'path': [J5.tolist(), [J5[0], J5[1] - 0.75]], 'end': 'short'},
-        {'name': 'ground_6', 'path': [J6.tolist(), [J6[0], J6[1] - 0.75]], 'end': 'short'},
+        {'name': 'ground_2', 'path': [J2.tolist(), [J2[0], J2[1] - 0.211113]], 'end': 'short'},
+        {'name': 'ground_3', 'path': [J3.tolist(), [J3[0], J3[1] - 0.104681]], 'end': 'short'},
+        {'name': 'ground_4', 'path': [J4.tolist(), [J4[0], J4[1] - 0.0826346]], 'end': 'short'},
+        {'name': 'ground_5', 'path': [J5.tolist(), [J5[0], J5[1] - 0.104681]], 'end': 'short'},
+        {'name': 'ground_6', 'path': [J6.tolist(), [J6[0], J6[1] - 0.211113]], 'end': 'short'},
 
         # 2 Launchpad ground routes to auto-created ShortToGround
         {
             'name': 'left_ground',
             'start': {'component': 'left_launch', 'pin': 'ground'},
             'end': 'short',
-            'path': [[J1[0], J1[1] - 0.75]]
+            'path': [[J1[0], J1[1] + 1.13357]]
         },
         {
             'name': 'right_ground',
             'start': {'component': 'right_launch', 'pin': 'ground'},
             'end': 'short',
-            'path': [[J7[0], J7[1] - 0.75]]
+            'path': [[J7[0], J7[1] + 1.13357]]
         }
     ]
 

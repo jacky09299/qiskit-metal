@@ -509,18 +509,24 @@ class TreeRoute:
             elif r_item['start_type'] in ('junction', 'short_obj'):
                 start_pin = r_item['start_data']
             else:
-                raise ValueError(f"Route {full_name} has invalid start specification")
+                raise ValueError(
+                    f"Route {full_name} has invalid start specification"
+                )
 
             if r_item['end_type'] == 'component':
                 end_pin = r_item['end_data']['spec']
             elif r_item['end_type'] in ('junction', 'short_obj'):
                 end_pin = r_item['end_data']
             else:
-                raise ValueError(f"Route {full_name} has invalid end specification")
+                raise ValueError(
+                    f"Route {full_name} has invalid end specification"
+                )
 
             intermediate_pts = coords[1:-1]
+
+            # RouteAnchors 的 anchor key 必須從 0 開始
             anchors = OrderedDict(
-                (i + 1, np.asarray(pt, dtype=float))
+                (i, np.asarray(pt, dtype=float))
                 for i, pt in enumerate(intermediate_pts)
             )
 
@@ -549,6 +555,7 @@ class TreeRoute:
                     anchors=anchors,
                     fillet=self.fillet
                 )
+
                 route = RouteAnchors(
                     self.design,
                     full_name,
