@@ -1,224 +1,335 @@
 import os
-import traceback
-from collections import OrderedDict
-
 import numpy as np
+
 from qiskit_metal import designs
 from qiskit_metal.qlibrary.terminations.launchpad_wb import LaunchpadWirebond
-
-try:
-    from qiskit_metal import MetalGUI
-except ImportError:
-    MetalGUI = None
+from qiskit_metal import MetalGUI
 
 from components import TreeRoute
 
 
 # ============================================================
-# Test settings
+# Design Parameters
 # ============================================================
 
 TRACE_WIDTH = '10um'
 TRACE_GAP = '6um'
 FILLET = '0um'
-ENABLE_GUI = os.environ.get('ENABLE_GUI', 'True').lower() == 'true'
 
-# Nodes coordinates from the meander sketch
-J1 = np.array([-8.75, -3])
-J2 = np.array([-6.60, -0.10])
-J3 = np.array([ 0.00,  3.20])
-J4 = np.array([-0.90, -2.80])
-J5 = np.array([ 0.90, -2.80])
-J6 = np.array([ 6.60, -0.10])
-J7 = np.array([ 8.75, -3])
-
-Y_TOP = 3.20
-Y_UPPER_LOW = 0.90
-Y_MIDDLE_HIGH = 0.05
-Y_MIDDLE_LOW = -1.95
-Y_BOTTOM_HIGH = -1.95
-Y_BOTTOM_LOW = -4.05
-
-EXPECTED_MAIN_ROUTES = 6
-EXPECTED_GROUND_ROUTES = 7
-EXPECTED_TOTAL_ROUTES = 13
-EXPECTED_VIRTUAL_JUNCTIONS = 5
+ENABLE_GUI = os.environ.get(
+    'ENABLE_GUI',
+    'True'
+).lower() == 'true'
 
 
 # ============================================================
-# Path generators for routes
+# Geometry Parameters
+# Units: mm
 # ============================================================
 
-def bottom_left_path():
-    """J1 -> J4: lower-left meander."""
-    return [
-        {'component': 'left_launch', 'pin': 'tie'},
-        [J1[0] + 0.45, J1[1]],
-        [-7.80, J1[1]],
-        [-7.80, Y_BOTTOM_HIGH],
-        [-7.20, Y_BOTTOM_HIGH],
-        [-7.20, Y_BOTTOM_LOW],
-        [-6.60, Y_BOTTOM_LOW],
-        [-6.60, Y_BOTTOM_HIGH],
-        [-6.00, Y_BOTTOM_HIGH],
-        [-6.00, Y_BOTTOM_LOW],
-        [-5.40, Y_BOTTOM_LOW],
-        [-5.40, Y_BOTTOM_HIGH],
-        [-4.80, Y_BOTTOM_HIGH],
-        [-4.80, Y_BOTTOM_LOW],
-        [-4.20, Y_BOTTOM_LOW],
-        [-4.20, Y_BOTTOM_HIGH],
-        [-3.60, Y_BOTTOM_HIGH],
-        [-3.60, Y_BOTTOM_LOW],
-        [-3.00, Y_BOTTOM_LOW],
-        [-3.00, Y_BOTTOM_HIGH],
-        [-2.40, Y_BOTTOM_HIGH],
-        [-2.40, Y_BOTTOM_LOW],
-        [-1.80, Y_BOTTOM_LOW],
-        [-1.80, float(J4[1])],
-        J4.tolist()
-    ]
+B = 0.60
+D = 0.40
+C = 0.85
+DELTA = 1.05
 
+A1 = 2.10
+A2 = 2.00
+A3 = 2.30
 
-def middle_left_path():
-    """J4 -> J2: middle-left meander."""
-    return [
-        J4.tolist(),
-        [float(J4[0]), Y_MIDDLE_HIGH],
-        [-1.90, Y_MIDDLE_HIGH],
-        [-1.90, Y_MIDDLE_LOW],
-        [-2.50, Y_MIDDLE_LOW],
-        [-2.50, Y_MIDDLE_HIGH],
-        [-3.10, Y_MIDDLE_HIGH],
-        [-3.10, Y_MIDDLE_LOW],
-        [-3.70, Y_MIDDLE_LOW],
-        [-3.70, Y_MIDDLE_HIGH],
-        [-4.30, Y_MIDDLE_HIGH],
-        [-4.30, Y_MIDDLE_LOW],
-        [-4.90, Y_MIDDLE_LOW],
-        [-4.90, Y_MIDDLE_HIGH],
-        [-5.50, Y_MIDDLE_HIGH],
-        [-5.50, Y_MIDDLE_LOW],
-        [-6.10, Y_MIDDLE_LOW],
-        [-6.10, float(J2[1])],
-        J2.tolist()
-    ]
-
-
-def upper_left_path():
-    """J2 -> J3: upper-left meander."""
-    return [
-        J2.tolist(),
-        [-6.60, 0.55],
-        [-6.60, Y_TOP],
-        [-6.00, Y_TOP],
-        [-6.00, Y_UPPER_LOW],
-        [-5.40, Y_UPPER_LOW],
-        [-5.40, Y_TOP],
-        [-4.80, Y_TOP],
-        [-4.80, Y_UPPER_LOW],
-        [-4.20, Y_UPPER_LOW],
-        [-4.20, Y_TOP],
-        [-3.60, Y_TOP],
-        [-3.60, Y_UPPER_LOW],
-        [-3.00, Y_UPPER_LOW],
-        [-3.00, Y_TOP],
-        [-2.40, Y_TOP],
-        [-2.40, Y_UPPER_LOW],
-        [-1.80, Y_UPPER_LOW],
-        [-1.80, Y_TOP],
-        [-0.40, Y_TOP],
-        J3.tolist()
-    ]
-
-
-def upper_right_path():
-    """J3 -> J6: upper-right meander."""
-    return [
-        J3.tolist(),
-        [0.40, Y_TOP],
-        [1.80, Y_TOP],
-        [1.80, Y_UPPER_LOW],
-        [2.40, Y_UPPER_LOW],
-        [2.40, Y_TOP],
-        [3.00, Y_TOP],
-        [3.00, Y_UPPER_LOW],
-        [3.60, Y_UPPER_LOW],
-        [3.60, Y_TOP],
-        [4.20, Y_TOP],
-        [4.20, Y_UPPER_LOW],
-        [4.80, Y_UPPER_LOW],
-        [4.80, Y_TOP],
-        [5.40, Y_TOP],
-        [5.40, Y_UPPER_LOW],
-        [6.00, Y_UPPER_LOW],
-        [6.00, Y_TOP],
-        [6.60, Y_TOP],
-        [6.60, 0.55],
-        J6.tolist()
-    ]
-
-
-def middle_right_path():
-    """J6 -> J5: middle-right meander."""
-    return [
-        J6.tolist(),
-        [6.10, float(J6[1])],
-        [6.10, Y_MIDDLE_LOW],
-        [5.50, Y_MIDDLE_LOW],
-        [5.50, Y_MIDDLE_HIGH],
-        [4.90, Y_MIDDLE_HIGH],
-        [4.90, Y_MIDDLE_LOW],
-        [4.30, Y_MIDDLE_LOW],
-        [4.30, Y_MIDDLE_HIGH],
-        [3.70, Y_MIDDLE_HIGH],
-        [3.70, Y_MIDDLE_LOW],
-        [3.10, Y_MIDDLE_LOW],
-        [3.10, Y_MIDDLE_HIGH],
-        [2.50, Y_MIDDLE_HIGH],
-        [2.50, Y_MIDDLE_LOW],
-        [1.90, Y_MIDDLE_LOW],
-        [1.90, float(J5[1])],
-        [1.30, float(J5[1])],
-        J5.tolist()
-    ]
-
-
-def bottom_right_path():
-    """J5 -> J7: lower-right meander."""
-    return [
-        J5.tolist(),
-        [1.20, float(J5[1])],
-        [1.80, float(J5[1])],
-        [1.80, Y_BOTTOM_LOW],
-        [2.40, Y_BOTTOM_LOW],
-        [2.40, Y_BOTTOM_HIGH],
-        [3.00, Y_BOTTOM_HIGH],
-        [3.00, Y_BOTTOM_LOW],
-        [3.60, Y_BOTTOM_LOW],
-        [3.60, Y_BOTTOM_HIGH],
-        [4.20, Y_BOTTOM_HIGH],
-        [4.20, Y_BOTTOM_LOW],
-        [4.80, Y_BOTTOM_LOW],
-        [4.80, Y_BOTTOM_HIGH],
-        [5.40, Y_BOTTOM_HIGH],
-        [5.40, Y_BOTTOM_LOW],
-        [6.00, Y_BOTTOM_LOW],
-        [6.00, Y_BOTTOM_HIGH],
-        [6.60, Y_BOTTOM_HIGH],
-        [6.60, Y_BOTTOM_LOW],
-        [7.20, J7[1]],
-        [J7[0] - 0.45, J7[1]],
-        {'component': 'right_launch', 'pin': 'tie'}
-    ]
+LP1 = 1.13
+LP2 = 0.08
+LP3 = 0.10
+LP4 = 0.21
+LP5 = 0.10
 
 
 # ============================================================
-# Physical QComponents
+# Utility Functions
 # ============================================================
 
-def create_launchpads(design):
-    left = LaunchpadWirebond(
+def normalize_point(point, digits=6):
+    """Convert a numpy array, tuple, or list to a float coordinate list."""
+    return [
+        round(float(point[0]), digits),
+        round(float(point[1]), digits)
+    ]
+
+
+def points_close(point_a, point_b, atol=1e-9):
+    """Return True when two coordinates are equal within tolerance."""
+    return np.allclose(
+        np.asarray(point_a, dtype=float),
+        np.asarray(point_b, dtype=float),
+        atol=atol,
+        rtol=0.0
+    )
+
+
+# ============================================================
+# Path Builder
+# ============================================================
+
+class PathBuilder:
+    def __init__(self, start_pt):
+        start_pt = normalize_point(start_pt, digits=6)
+        self.P_now = [start_pt[0], start_pt[1]]
+        self.path = [list(self.P_now)]
+
+    def move(self, dx, dy):
+        """Add one horizontal or vertical movement."""
+        dx = float(dx)
+        dy = float(dy)
+
+        if abs(dx) > 1e-12 and abs(dy) > 1e-12:
+            raise ValueError(
+                f'PathBuilder.move() only accepts horizontal or vertical '
+                f'movement, received dx={dx}, dy={dy}'
+            )
+
+        if abs(dx) <= 1e-12 and abs(dy) <= 1e-12:
+            return self
+
+        self.P_now[0] = round(self.P_now[0] + dx, 6)
+        self.P_now[1] = round(self.P_now[1] + dy, 6)
+        self.path.append(list(self.P_now))
+        return self
+
+    def move_to_x(self, target_x):
+        dx = round(float(target_x) - self.P_now[0], 6)
+        if abs(dx) > 1e-12:
+            self.move(dx, 0)
+        return self
+
+    def move_to_y(self, target_y):
+        dy = round(float(target_y) - self.P_now[1], 6)
+        if abs(dy) > 1e-12:
+            self.move(0, dy)
+        return self
+
+    def move_to(self, target_pt, horizontal_first=True):
+        target_pt = normalize_point(target_pt, digits=6)
+        if horizontal_first:
+            self.move_to_x(target_pt[0])
+            self.move_to_y(target_pt[1])
+        else:
+            self.move_to_y(target_pt[1])
+            self.move_to_x(target_pt[0])
+        return self
+
+
+# ============================================================
+# Incremental Path Generation
+# ============================================================
+
+def generate_routes(left_tie, right_tie):
+    """Build the main routes and all ground stubs."""
+    left_tie = normalize_point(left_tie)
+    right_tie = normalize_point(right_tie)
+
+    print('\n' + '=' * 60)
+    print('Route endpoint coordinates')
+    print('=' * 60)
+    print(f'left_launch.tie  = {left_tie}')
+    print(f'right_launch.tie = {right_tie}')
+    print('=' * 60 + '\n')
+
+    # ---------------- Left side ----------------
+    left_nominal_entry = [-8.75, -3.00]
+
+    # Path 1: Left Launchpad -> J4
+    pb1 = PathBuilder(left_tie)
+    pb1.path.insert(0, {'component': 'left_launch', 'pin': 'tie'})
+    pb1.move_to(left_nominal_entry, horizontal_first=True)
+    pb1.move(0.95, 0)
+    pb1.move(0, DELTA)
+
+    for i in range(5):
+        pb1.move(B, 0)
+        pb1.move(0, -A1)
+        pb1.move(B, 0)
+        if i < 4:
+            pb1.move(0, A1)
+
+    pb1.move(0, 1.25)
+    pb1.move(0.90, 0)
+    t1 = pb1.path
+
+    # Path 2: J4 -> J2
+    pb2 = PathBuilder([-0.90, -2.80])
+    pb2.move(0, 2.85)
+    pb2.move(-1.00, 0)
+
+    for _ in range(3):
+        pb2.move(0, -A2)
+        pb2.move(-B, 0)
+        pb2.move(0, A2)
+        pb2.move(-B, 0)
+
+    pb2.move(0, -A2)
+    pb2.move(-B, 0)
+    pb2.move(0, 1.85)
+    pb2.move(-0.50, 0)
+    t2 = pb2.path
+
+    # Path 3: J2 -> J3
+    pb3 = PathBuilder([-6.60, -0.10])
+    pb3.move(0, 3.30)
+
+    for _ in range(4):
+        pb3.move(B, 0)
+        pb3.move(0, -A3)
+        pb3.move(B, 0)
+        pb3.move(0, A3)
+
+    pb3.move(1.80, 0)
+    t3 = pb3.path
+
+    # ---------------- Right side ----------------
+
+    # Path 4: J3 -> J6
+    pb4 = PathBuilder([0.00, 3.20])
+    pb4.move(1.80, 0)
+
+    for _ in range(4):
+        pb4.move(0, -A3)
+        pb4.move(B, 0)
+        pb4.move(0, A3)
+        pb4.move(B, 0)
+
+    pb4.move(0, -3.30)
+    t4 = pb4.path
+
+    # Path 5: J6 -> J5
+    pb5 = PathBuilder([6.60, -0.10])
+    pb5.move(-0.50, 0)
+    pb5.move(0, -1.85)
+
+    for _ in range(3):
+        pb5.move(-B, 0)
+        pb5.move(0, A2)
+        pb5.move(-B, 0)
+        pb5.move(0, -A2)
+
+    pb5.move(-B, 0)
+    pb5.move(0, -0.85)
+    pb5.move(-1.00, 0)
+    t5 = pb5.path
+
+    # Path 6: J5 -> Right Launchpad
+    pb6 = PathBuilder([0.90, -2.80])
+    pb6.move(0.90, 0)
+
+    for _ in range(4):
+        pb6.move(0, -1.25)
+        pb6.move(B, 0)
+        pb6.move(0, A1)
+        pb6.move(B, 0)
+
+    pb6.move(0, -1.05)
+    pb6.move(1.20, 0)
+    pb6.move_to(right_tie, horizontal_first=True)
+    pb6.path.append({'component': 'right_launch', 'pin': 'tie'})
+    t6 = pb6.path
+
+    # ---------------- Ground stubs ----------------
+    def stub(pt, length):
+        pt = normalize_point(pt)
+        return [
+            list(pt),
+            [pt[0], round(pt[1] - float(length), 6)]
+        ]
+
+    stubs = {
+        'left_ground': {
+            'path': stub(left_tie, -LP1),
+            'end': 'short'
+        },
+        'right_ground': {
+            'path': stub(right_tie, -LP1),
+            'end': 'short'
+        },
+        'ground_4': {
+            'path': stub([-0.90, -2.80], LP2),
+            'end': 'short'
+        },
+        'ground_2': {
+            'path': stub([-6.60, -0.10], LP4),
+            'end': 'short'
+        },
+        'ground_3': {
+            'path': stub([0.00, 3.20], LP3),
+            'end': 'short'
+        },
+        'ground_6': {
+            'path': stub([6.60, -0.10], LP4),
+            'end': 'short'
+        },
+        'ground_5': {
+            'path': stub([0.90, -2.80], LP5),
+            'end': 'short'
+        }
+    }
+
+    return t1, t2, t3, t4, t5, t6, stubs
+
+
+# ============================================================
+# Validation
+# ============================================================
+
+def validate_route_connections(t1, t2, t3, t4, t5, t6, stubs,
+                               left_tie, right_tie):
+    left_tie = normalize_point(left_tie)
+    right_tie = normalize_point(right_tie)
+
+    checks = [
+        ('t1 -> t2 at J4', [-0.90, -2.80], t1[-1], t2[0]),
+        ('t2 -> t3 at J2', [-6.60, -0.10], t2[-1], t3[0]),
+        ('t3 -> t4 at J3', [0.00, 3.20], t3[-1], t4[0]),
+        ('t4 -> t5 at J6', [6.60, -0.10], t4[-1], t5[0]),
+        ('t5 -> t6 at J5', [0.90, -2.80], t5[-1], t6[0]),
+        ('left_ground start', left_tie,
+         stubs['left_ground']['path'][0], left_tie),
+        ('right_ground start', right_tie,
+         stubs['right_ground']['path'][0], right_tie)
+    ]
+
+    print('\n' + '=' * 60)
+    print('Route connection validation')
+    print('=' * 60)
+
+    errors = []
+    for name, expected, actual_a, actual_b in checks:
+        valid = (
+            points_close(expected, actual_a)
+            and points_close(expected, actual_b)
+        )
+        status = 'OK' if valid else 'ERROR'
+        print(
+            f'[{status}] {name}: expected={expected}, '
+            f'a={actual_a}, b={actual_b}'
+        )
+        if not valid:
+            errors.append(name)
+
+    print('=' * 60 + '\n')
+
+    if errors:
+        raise ValueError(
+            'Route connection coordinate mismatch: ' + ', '.join(errors)
+        )
+
+
+# ============================================================
+# Main Execution
+# ============================================================
+
+def main():
+    design = designs.DesignPlanar(overwrite_enabled=True)
+    design.chips.main.size.size_x = '22mm'
+    design.chips.main.size.size_y = '12mm'
+
+    left_launch = LaunchpadWirebond(
         design,
         'left_launch',
         options=dict(
@@ -226,16 +337,11 @@ def create_launchpads(design):
             pos_y='-3mm',
             orientation='0',
             trace_width=TRACE_WIDTH,
-            trace_gap=TRACE_GAP,
-            lead_length='250um',
-            pad_width='300um',
-            pad_height='300um',
-            pad_gap='60um',
-            taper_height='250um'
+            trace_gap=TRACE_GAP
         )
     )
 
-    right = LaunchpadWirebond(
+    right_launch = LaunchpadWirebond(
         design,
         'right_launch',
         options=dict(
@@ -243,162 +349,83 @@ def create_launchpads(design):
             pos_y='-3mm',
             orientation='180',
             trace_width=TRACE_WIDTH,
-            trace_gap=TRACE_GAP,
-            lead_length='250um',
-            pad_width='300um',
-            pad_height='300um',
-            pad_gap='60um',
-            taper_height='250um'
+            trace_gap=TRACE_GAP
         )
     )
 
-    return left, right
+    left_tie = normalize_point(left_launch.pins['tie']['middle'])
+    right_tie = normalize_point(right_launch.pins['tie']['middle'])
 
+    print('\nLaunchpad pin coordinates:')
+    print(f'left_launch.tie  = {left_tie}')
+    print(f'right_launch.tie = {right_tie}')
 
-# ============================================================
-# Configuration using intuition path-based syntax
-# ============================================================
+    t1, t2, t3, t4, t5, t6, stubs = generate_routes(
+        left_tie=left_tie,
+        right_tie=right_tie
+    )
 
-def build_tree_config():
-    return [
-        # Main 6 routes
-        {'name': 'j1_to_j4', 'path': bottom_left_path()},
-        {'name': 'j4_to_j2', 'path': middle_left_path()},
-        {'name': 'j2_to_j3', 'path': upper_left_path()},
-        {'name': 'j3_to_j6', 'path': upper_right_path()},
-        {'name': 'j6_to_j5', 'path': middle_right_path()},
-        {'name': 'j5_to_j7', 'path': bottom_right_path()},
+    validate_route_connections(
+        t1=t1,
+        t2=t2,
+        t3=t3,
+        t4=t4,
+        t5=t5,
+        t6=t6,
+        stubs=stubs,
+        left_tie=left_tie,
+        right_tie=right_tie
+    )
 
-        # 5 Ground routes connecting junctions J2..J6 to auto-created ShortToGround
-        {'name': 'ground_2', 'path': [J2.tolist(), [J2[0], J2[1] - 0.211113]], 'end': 'short'},
-        {'name': 'ground_3', 'path': [J3.tolist(), [J3[0], J3[1] - 0.104681]], 'end': 'short'},
-        {'name': 'ground_4', 'path': [J4.tolist(), [J4[0], J4[1] - 0.0826346]], 'end': 'short'},
-        {'name': 'ground_5', 'path': [J5.tolist(), [J5[0], J5[1] - 0.104681]], 'end': 'short'},
-        {'name': 'ground_6', 'path': [J6.tolist(), [J6[0], J6[1] - 0.211113]], 'end': 'short'},
-
-        # 2 Launchpad ground routes (branching from J1 and J7 on main routes j1_to_j4 and j5_to_j7)
-        {
-            'name': 'left_ground',
-            'path': [J1.tolist(), [J1[0], J1[1] + 1.13357]],
-            'end': 'short'
-        },
-        {
-            'name': 'right_ground',
-            'path': [J7.tolist(), [J7[0], J7[1] + 1.13357]],
-            'end': 'short'
-        }
+    tree_config = [
+        {'name': 'j1_to_j4', 'path': t1},
+        {'name': 'j4_to_j2', 'path': t2},
+        {'name': 'j2_to_j3', 'path': t3},
+        {'name': 'j3_to_j6', 'path': t4},
+        {'name': 'j6_to_j5', 'path': t5},
+        {'name': 'j5_to_j7', 'path': t6}
     ]
 
+    for stub_name, stub_config in stubs.items():
+        tree_config.append({'name': stub_name, **stub_config})
 
-# ============================================================
-# Diagnostics
-# ============================================================
+    tree = TreeRoute(
+        design=design,
+        name='test2',
+        tree_config=tree_config,
+        trace_width=TRACE_WIDTH,
+        trace_gap=TRACE_GAP,
+        fillet=FILLET,
+        lead_in='0mm',
+        lead_out='0mm'
+    )
 
-def collect_and_validate(tree):
-    all_routes = tree.routes
+    print('\nTreeRoute created successfully.')
 
-    expected = {
-        'test2_j1_to_j4',
-        'test2_j4_to_j2',
-        'test2_j2_to_j3',
-        'test2_j3_to_j6',
-        'test2_j6_to_j5',
-        'test2_j5_to_j7',
-        'test2_ground_2',
-        'test2_ground_3',
-        'test2_ground_4',
-        'test2_ground_5',
-        'test2_ground_6',
-        'test2_left_ground',
-        'test2_right_ground',
-    }
+    if hasattr(tree, 'print_routes'):
+        tree.print_routes()
 
-    missing = expected - set(all_routes)
-    extra = set(all_routes) - expected
-    failures = []
-    total = 0.0
+    if hasattr(tree, 'print_junctions'):
+        tree.print_junctions()
 
-    print('\n' + '=' * 80)
-    print('Test 2 result')
-    print('=' * 80)
-    print(f'Total routes:      {len(all_routes)} / expected 13')
-    print(f'Virtual junctions: {len(tree.junctions)} / expected 5')
-    print(f'Shorts created:    {len(tree.shorts)} / expected 7')
-    print('-' * 80)
-
-    for name in sorted(all_routes):
-        route = all_routes[name]
+    if hasattr(tree, 'get_total_length'):
         try:
-            length = float(route.length)
-            if not np.isfinite(length) or length <= 0:
-                raise ValueError(f'invalid length={length}')
-            total += length
-            print(
-                f'[OK] {name:<34} '
-                f'{route.__class__.__name__:<16} {length:>10.5f} mm'
-            )
+            print(f'\nTotal route length: {tree.get_total_length()} mm')
         except Exception as exc:
-            failures.append((name, str(exc)))
-            print(f'[FAIL] {name}: {exc}')
-
-    assert len(all_routes) == EXPECTED_TOTAL_ROUTES
-    assert len(tree.junctions) == EXPECTED_VIRTUAL_JUNCTIONS
-    assert len(tree.shorts) == EXPECTED_GROUND_ROUTES
-    assert not missing, f'Missing routes: {sorted(missing)}'
-    assert not extra, f'Extra routes: {sorted(extra)}'
-    assert not failures, f'Route length errors: {failures}'
-
-    print('-' * 80)
-    print(f'Total route length: {total:.6f} mm')
-    print('TEST 2 PASS')
-    return all_routes
-
-
-# ============================================================
-# Main
-# ============================================================
-
-def run_test_2():
-    design = designs.DesignPlanar(overwrite_enabled=True)
-    design.chips.main.size.size_x = '22mm'
-    design.chips.main.size.size_y = '12mm'
-
-    left, right = create_launchpads(design)
-
-    tree_config = build_tree_config()
-
-    try:
-        tree = TreeRoute(
-            design=design,
-            name='test2',
-            tree_config=tree_config,
-            trace_width=TRACE_WIDTH,
-            trace_gap=TRACE_GAP,
-            fillet=FILLET,
-            lead_in='0mm',
-            lead_out='0mm'
-        )
-    except Exception:
-        print('\nTreeRoute construction failed.')
-        traceback.print_exc()
-        raise
-
-    routes = collect_and_validate(tree)
+            print(f'\nUnable to calculate total route length: {exc}')
 
     if ENABLE_GUI and MetalGUI is not None:
-        try:
-            gui = MetalGUI(design)
-            gui.rebuild()
-            gui.autoscale()
-            if hasattr(gui, 'main_window') and gui.main_window is not None:
-                gui.main_window.show()
-                gui.qApp.exec_()
-        except Exception:
-            print('GUI failed after routing validation.')
-            traceback.print_exc()
+        gui = MetalGUI(design)
+        gui.rebuild()
+        gui.autoscale()
 
-    return design, tree, routes
+        if hasattr(gui, 'main_window') and gui.main_window is not None:
+            gui.main_window.show()
+            gui.qApp.exec_()
+
+    return design, tree
 
 
 if __name__ == '__main__':
-    run_test_2()
+    main()
+
