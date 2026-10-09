@@ -3,377 +3,245 @@ import numpy as np
 
 from qiskit_metal import designs, MetalGUI
 from qiskit_metal.qlibrary.terminations.launchpad_wb import LaunchpadWirebond
-
 from components import TreeRoute
 
-
 # ============================================================
-# User Parameters
-# All geometric values below are in mm.
+# Parameters, unit: mm
 # ============================================================
-
 TRACE_WIDTH = '10um'
 TRACE_GAP = '6um'
 FILLET = '0um'
 ENABLE_GUI = os.environ.get('ENABLE_GUI', 'True').lower() == 'true'
 
-# Vertical depths of the lower, middle, and upper meanders.
 a1 = 2.10
 a2 = 2.00
 a3 = 2.30
-
-# b: horizontal width of each meander leg.
-# c: vertical clearance between neighboring meander bands.
-# d: horizontal half-spacing at the center and transition sections.
-# n: number of U-shaped meander cells in each half-band.
 b = 0.60
 c = 0.85
 d = 0.40
-n = 4
+delta = 1.05
+n = 3
 
-# Seven independently controlled grounding-stub lengths.
-# lp1/lp7: launchpad-side stubs.
-# lp2/lp6: lower-to-middle junction stubs.
-# lp3/lp5: middle-to-upper junction stubs.
-# lp4: center stub.
 lp1 = 1.13
-lp2 = 0.10
+lp2 = 0.08
 lp3 = 0.21
 lp4 = 0.10
 lp5 = 0.21
-lp6 = 0.10
+lp6 = 0.08
 lp7 = 1.13
 
-# Fixed launchpad positions. The route itself reads the actual tie-pin centers.
-LEFT_LAUNCH_X = -9.0
-RIGHT_LAUNCH_X = 9.0
-LAUNCH_Y = -3.0
+LAUNCH_Y = -3.00
+LAUNCH_TIE_INSET = 0.025
 
 
-# ============================================================
-# Basic Helpers
-# ============================================================
-
-def point(value, digits=6):
-    return [round(float(value[0]), digits), round(float(value[1]), digits)]
+def pt(value):
+    return [round(float(value[0]), 6), round(float(value[1]), 6)]
 
 
 def is_coord(value):
     return isinstance(value, (list, tuple, np.ndarray)) and len(value) == 2
 
 
+def coords(path):
+    return [pt(item) for item in path if is_coord(item)]
+
+
 def mirror_point(value):
-    value = point(value)
-    return [round(-value[0], 6), value[1]]
+    value = pt(value)
+    return [-value[0], value[1]]
 
 
-def route_coords(path):
-    return [point(item) for item in path if is_coord(item)]
-
-
-def mirror_reverse_path(path, end_component=None, end_pin='tie'):
-    """Mirror a left-side path about x=0 and reverse route direction."""
-    result = [mirror_point(item) for item in reversed(route_coords(path))]
-    if end_component is not None:
-        result.append({'component': end_component, 'pin': end_pin})
+def mirror_reverse(path, component=None, pin='tie'):
+    result = [mirror_point(item) for item in reversed(coords(path))]
+    if component:
+        result.append({'component': component, 'pin': pin})
     return result
-
-
-def assert_positive_parameters():
-    values = {
-        'a1': a1, 'a2': a2, 'a3': a3,
-        'b': b, 'c': c, 'd': d,
-        'lp1': lp1, 'lp2': lp2, 'lp3': lp3, 'lp4': lp4,
-        'lp5': lp5, 'lp6': lp6, 'lp7': lp7,
-    }
-    invalid = [name for name, value in values.items() if float(value) <= 0]
-    if invalid:
-        raise ValueError('Parameters must be positive: ' + ', '.join(invalid))
-    if not isinstance(n, int) or isinstance(n, bool) or n < 1:
-        raise ValueError(f'n must be a positive integer, received {n!r}')
 
 
 class PathBuilder:
     def __init__(self, start):
-        self.current = point(start)
-        self.path = [list(self.current)]
+        self.now = pt(start)
+        self.path = [list(self.now)]
 
     def move(self, dx=0.0, dy=0.0):
-        dx = float(dx)
-        dy = float(dy)
+        dx, dy = float(dx), float(dy)
         if abs(dx) > 1e-12 and abs(dy) > 1e-12:
-            raise ValueError(f'Only orthogonal moves are allowed: dx={dx}, dy={dy}')
+            raise ValueError('Only orthogonal moves are allowed')
         if abs(dx) <= 1e-12 and abs(dy) <= 1e-12:
             return self
-        self.current = [
-            round(self.current[0] + dx, 6),
-            round(self.current[1] + dy, 6),
-        ]
-        self.path.append(list(self.current))
+        self.now = [round(self.now[0] + dx, 6), round(self.now[1] + dy, 6)]
+        self.path.append(list(self.now))
         return self
 
     def to_x(self, x):
-        return self.move(dx=round(float(x) - self.current[0], 6))
+        return self.move(dx=round(float(x) - self.now[0], 6))
 
     def to_y(self, y):
-        return self.move(dy=round(float(y) - self.current[1], 6))
-
-    def to_point(self, target, horizontal_first=True):
-        target = point(target)
-        if horizontal_first:
-            self.to_x(target[0])
-            self.to_y(target[1])
-        else:
-            self.to_y(target[1])
-            self.to_x(target[0])
-        return self
+        return self.move(dy=round(float(y) - self.now[1], 6))
 
 
-# ============================================================
-# Meander Builder
-# ============================================================
-
-def add_horizontal_meander(builder, cells, step_x, depth, first_direction):
-    """
-    Add repeated rectangular U cells.
-
-    Each cell occupies a horizontal width of 2*b. The route first moves one
-    horizontal b segment, makes a vertical excursion of depth, moves another b,
-    and returns to the original baseline except after the final cell when the
-    caller requests a later transition.
-    """
-    vertical_sign = 1.0 if first_direction == 'up' else -1.0
-    horizontal_sign = 1.0 if step_x > 0 else -1.0
-
-    for _ in range(cells):
-        builder.move(dx=horizontal_sign * b)
-        builder.move(dy=vertical_sign * depth)
-        builder.move(dx=horizontal_sign * b)
-        builder.move(dy=-vertical_sign * depth)
+def add_u_cells(builder, count, direction, depth):
+    """Every horizontal segment in a U cell is exactly b."""
+    sx = 1.0 if direction == 'right' else -1.0
+    for _ in range(count):
+        builder.move(dx=sx * b)
+        builder.move(dy=-depth)
+        builder.move(dx=sx * b)
+        builder.move(dy=depth)
     return builder
 
 
-# ============================================================
-# Geometry Generation
-# ============================================================
+def derive_geometry():
+    if n < 1 or not isinstance(n, int):
+        raise ValueError('n must be a positive integer')
 
-def generate_routes(left_tie, right_tie):
-    assert_positive_parameters()
+    cell_width = 2.0 * b
+    half_width = n * cell_width
 
-    left_tie = point(left_tie)
-    right_tie = point(right_tie)
-    expected_right_tie = mirror_point(left_tie)
+    # Inner nodes have center separation 2*d.
+    j4_x = -d
+    j5_x = d
+    j2_x = j4_x - half_width
+    j6_x = -j2_x
 
-    if not np.allclose(right_tie, expected_right_tie, atol=1e-6, rtol=0.0):
-        raise ValueError(
-            'Launchpad tie pins are not mirror-symmetric: '
-            f'left={left_tie}, right={right_tie}, expected={expected_right_tie}'
-        )
+    # Red launch segment is one straight horizontal section of length 2*b.
+    left_tie_x = j2_x - 2.0 * b
+    right_tie_x = -left_tie_x
 
-    # Derived coordinates. The three left routes form the complete left half.
-    # Right-side coordinates are never calculated independently.
-    x_center_half = d
-    x_inner = -x_center_half
-    x_outer = x_inner - 2.0 * n * b
+    # delta is applied only after the straight launch segment.
+    y_lower = LAUNCH_Y + delta
+    # Keep c as the clear vertical gap between adjacent meander bands.
+    y_middle = y_lower + a2 + c
+    y_upper = y_middle + a3 + c
 
-    y_lower = left_tie[1]
-    y_middle = y_lower + a1 + c
-    y_upper = y_middle + a2 + c
+    return {
+        'left_tie': pt([left_tie_x, LAUNCH_Y]),
+        'right_tie': pt([right_tie_x, LAUNCH_Y]),
+        'j4': pt([j4_x, y_lower]),
+        'j2': pt([j2_x, y_middle]),
+        'j3': pt([0.0, y_upper]),
+        'j6': pt([j6_x, y_middle]),
+        'j5': pt([j5_x, y_lower]),
+        'y_lower': y_lower,
+        'y_middle': y_middle,
+        'y_upper': y_upper,
+    }
 
-    j4 = point([x_inner, y_lower])
-    j2 = point([x_outer, y_middle])
-    j3 = point([0.0, y_upper])
 
-    # Ensure the generated geometry remains inside the launchpads.
-    if x_outer <= left_tie[0]:
-        raise ValueError(
-            'The left meander is wider than the available launchpad span. '
-            f'x_outer={x_outer}, left_tie_x={left_tie[0]}. '
-            'Reduce n or b, or move the launchpads outward.'
-        )
+def generate_routes(left_tie, right_tie, g):
+    left_tie, right_tie = pt(left_tie), pt(right_tie)
 
-    # --------------------------------------------------------
-    # Lower-left band: left launch -> J4
-    # --------------------------------------------------------
-    lower_start_x = x_outer - 2.0 * b
-    pb1 = PathBuilder(left_tie)
-    pb1.path.insert(0, {'component': 'left_launch', 'pin': 'tie'})
-    pb1.to_x(lower_start_x)
+    # t1: straight red 2*b, then delta, then lower meander.
+    p1 = PathBuilder(left_tie)
+    p1.path.insert(0, {'component': 'left_launch', 'pin': 'tie'})
+    p1.move(dx=2.0 * b)
+    p1.move(dy=delta)
+    add_u_cells(p1, n, 'right', a1)
+    if not np.allclose(p1.now, g['j4']):
+        raise ValueError(f't1 endpoint {p1.now} != J4 {g["j4"]}')
+    t1 = p1.path
 
-    # One entry cell plus n controlled cells, ending at the inner junction.
-    add_horizontal_meander(pb1, n, step_x=1.0, depth=a1, first_direction='down')
-    pb1.to_x(j4[0])
-    pb1.to_y(j4[1])
-    t1 = pb1.path
+    # t2: middle meander, all horizontal pieces b.
+    p2 = PathBuilder(g['j4'])
+    p2.to_y(g['y_middle'])
+    add_u_cells(p2, n, 'left', a2)
+    if not np.allclose(p2.now, g['j2']):
+        raise ValueError(f't2 endpoint {p2.now} != J2 {g["j2"]}')
+    t2 = p2.path
 
-    # --------------------------------------------------------
-    # Middle-left band: J4 -> J2
-    # The route climbs by a1+c, then meanders from inside to outside.
-    # --------------------------------------------------------
-    pb2 = PathBuilder(j4)
-    pb2.to_y(y_middle)
-    add_horizontal_meander(pb2, n, step_x=-1.0, depth=a2, first_direction='down')
-    pb2.to_x(j2[0])
-    pb2.to_y(j2[1])
-    t2 = pb2.path
+    # t3: upper meander, all horizontal pieces b, then center d.
+    p3 = PathBuilder(g['j2'])
+    p3.to_y(g['y_upper'])
+    add_u_cells(p3, n, 'right', a3)
+    p3.move(dx=d)
+    if not np.allclose(p3.now, g['j3']):
+        raise ValueError(f't3 endpoint {p3.now} != J3 {g["j3"]}')
+    t3 = p3.path
 
-    # --------------------------------------------------------
-    # Upper-left band: J2 -> center J3
-    # The route climbs by a2+c, then meanders toward the center.
-    # --------------------------------------------------------
-    pb3 = PathBuilder(j2)
-    pb3.to_y(y_upper)
-    add_horizontal_meander(pb3, n, step_x=1.0, depth=a3, first_direction='down')
-    pb3.to_x(j3[0])
-    pb3.to_y(j3[1])
-    t3 = pb3.path
-
-    # Exact mirror symmetry for the complete right half.
-    t4 = mirror_reverse_path(t3)
-    t5 = mirror_reverse_path(t2)
-    t6 = mirror_reverse_path(t1, end_component='right_launch', end_pin='tie')
-
-    if not np.allclose(t6[-2], right_tie, atol=1e-6, rtol=0.0):
-        raise ValueError(
-            f'Mirrored endpoint {t6[-2]} does not match right tie {right_tie}'
-        )
+    t4 = mirror_reverse(t3)
+    t5 = mirror_reverse(t2)
+    t6 = mirror_reverse(t1, 'right_launch', 'tie')
     t6[-2] = list(right_tie)
 
-    # Seven independent grounding stubs. Positive direction is upward for the
-    # launchpad stubs; all internal stubs point downward as in the sketch.
-    def stub(start, length, direction='down'):
-        start = point(start)
-        sign = -1.0 if direction == 'down' else 1.0
-        return [start, [start[0], round(start[1] + sign * float(length), 6)]]
-
-    j6 = mirror_point(j2)
-    j5 = mirror_point(j4)
+    def stub(start, length, direction):
+        start = pt(start)
+        sign = 1.0 if direction == 'up' else -1.0
+        return [start, [start[0], round(start[1] + sign * length, 6)]]
 
     stubs = {
         'ground_lp1': {'path': stub(left_tie, lp1, 'up'), 'end': 'short'},
-        'ground_lp2': {'path': stub(j4, lp2, 'down'), 'end': 'short'},
-        'ground_lp3': {'path': stub(j2, lp3, 'down'), 'end': 'short'},
-        'ground_lp4': {'path': stub(j3, lp4, 'down'), 'end': 'short'},
-        'ground_lp5': {'path': stub(j6, lp5, 'down'), 'end': 'short'},
-        'ground_lp6': {'path': stub(j5, lp6, 'down'), 'end': 'short'},
+        'ground_lp2': {'path': stub(g['j4'], lp2, 'down'), 'end': 'short'},
+        'ground_lp3': {'path': stub(g['j2'], lp3, 'down'), 'end': 'short'},
+        'ground_lp4': {'path': stub(g['j3'], lp4, 'down'), 'end': 'short'},
+        'ground_lp5': {'path': stub(g['j6'], lp5, 'down'), 'end': 'short'},
+        'ground_lp6': {'path': stub(g['j5'], lp6, 'down'), 'end': 'short'},
         'ground_lp7': {'path': stub(right_tie, lp7, 'up'), 'end': 'short'},
     }
-
-    nodes = {
-        'left_tie': left_tie,
-        'j4': j4,
-        'j2': j2,
-        'j3': j3,
-        'j6': j6,
-        'j5': j5,
-        'right_tie': right_tie,
-    }
-
-    return (t1, t2, t3, t4, t5, t6), stubs, nodes
+    return (t1, t2, t3, t4, t5, t6), stubs
 
 
-# ============================================================
-# Validation
-# ============================================================
-
-def assert_mirror_pair(left_path, right_path, name):
-    expected = [mirror_point(p) for p in reversed(route_coords(left_path))]
-    actual = route_coords(right_path)
-    if len(expected) != len(actual):
-        raise ValueError(
-            f'{name}: point count differs, expected {len(expected)}, got {len(actual)}'
-        )
-    for index, (expected_point, actual_point) in enumerate(zip(expected, actual)):
-        if not np.allclose(expected_point, actual_point, atol=1e-6, rtol=0.0):
-            raise ValueError(
-                f'{name}: asymmetry at index {index}, '
-                f'expected={expected_point}, actual={actual_point}'
-            )
-
-
-def validate_geometry(routes, stubs, nodes):
+def validate(routes, g, left_tie, right_tie):
     t1, t2, t3, t4, t5, t6 = routes
 
-    assert_mirror_pair(t1, t6, 'lower band t1/t6')
-    assert_mirror_pair(t2, t5, 'middle band t2/t5')
-    assert_mirror_pair(t3, t4, 'upper band t3/t4')
+    # Exact mirror validation.
+    for left, right, name in [(t1, t6, 't1/t6'), (t2, t5, 't2/t5'), (t3, t4, 't3/t4')]:
+        expected = [mirror_point(p) for p in reversed(coords(left))]
+        actual = coords(right)
+        if len(expected) != len(actual) or not np.allclose(expected, actual):
+            raise ValueError(f'{name} mirror validation failed')
 
-    expected_endpoints = [
-        ('t1 end / t2 start', route_coords(t1)[-1], route_coords(t2)[0]),
-        ('t2 end / t3 start', route_coords(t2)[-1], route_coords(t3)[0]),
-        ('t3 end / t4 start', route_coords(t3)[-1], route_coords(t4)[0]),
-        ('t4 end / t5 start', route_coords(t4)[-1], route_coords(t5)[0]),
-        ('t5 end / t6 start', route_coords(t5)[-1], route_coords(t6)[0]),
-    ]
-    for name, p1, p2 in expected_endpoints:
-        if not np.allclose(p1, p2, atol=1e-6, rtol=0.0):
-            raise ValueError(f'{name} mismatch: {p1} != {p2}')
+    # Red segment is horizontal, uninterrupted, and exactly 2*b.
+    t1c = coords(t1)
+    if not (np.isclose(t1c[0][1], t1c[1][1]) and
+            np.isclose(t1c[1][0] - t1c[0][0], 2.0 * b)):
+        raise ValueError('Left red segment must be a straight horizontal 2*b line')
 
-    stub_node_map = {
-        'ground_lp1': 'left_tie',
-        'ground_lp2': 'j4',
-        'ground_lp3': 'j2',
-        'ground_lp4': 'j3',
-        'ground_lp5': 'j6',
-        'ground_lp6': 'j5',
-        'ground_lp7': 'right_tie',
-    }
-    for stub_name, node_name in stub_node_map.items():
-        actual = stubs[stub_name]['path'][0]
-        expected = nodes[node_name]
-        if not np.allclose(actual, expected, atol=1e-6, rtol=0.0):
-            raise ValueError(
-                f'{stub_name} starts at {actual}, expected node {node_name}={expected}'
-            )
+    # All internal U-cell horizontal segments are b.
+    for path, name in [(t1, 't1'), (t2, 't2'), (t3, 't3')]:
+        pc = coords(path)
+        for p0, p1 in zip(pc, pc[1:]):
+            dx, dy = abs(p1[0] - p0[0]), abs(p1[1] - p0[1])
+            if dx > 1e-9 and dy < 1e-9:
+                allowed = np.isclose(dx, b) or np.isclose(dx, 2*b) or np.isclose(dx, d)
+                if not allowed:
+                    raise ValueError(f'{name}: invalid horizontal width {dx}')
 
-    print('Geometry validation passed.')
-    for name, coord in nodes.items():
-        print(f'  {name:>10}: {coord}')
+    print('Validation passed: red launch lines are straight 2*b; U widths are b.')
 
-
-# ============================================================
-# Main
-# ============================================================
 
 def main():
+    g = derive_geometry()
+
+    left_pos_x = g['left_tie'][0] - LAUNCH_TIE_INSET
+    right_pos_x = g['right_tie'][0] + LAUNCH_TIE_INSET
+
     design = designs.DesignPlanar(overwrite_enabled=True)
-    design.chips.main.size.size_x = '22mm'
+    design.chips.main.size.size_x = f'{2 * abs(left_pos_x) + 2.0}mm'
     design.chips.main.size.size_y = '14mm'
 
     left_launch = LaunchpadWirebond(
-        design,
-        'left_launch',
-        options=dict(
-            pos_x=f'{LEFT_LAUNCH_X}mm',
-            pos_y=f'{LAUNCH_Y}mm',
-            orientation='0',
-            trace_width=TRACE_WIDTH,
-            trace_gap=TRACE_GAP,
-        ),
+        design, 'left_launch',
+        options=dict(pos_x=f'{left_pos_x}mm', pos_y=f'{LAUNCH_Y}mm',
+                     orientation='0', trace_width=TRACE_WIDTH, trace_gap=TRACE_GAP)
     )
-
     right_launch = LaunchpadWirebond(
-        design,
-        'right_launch',
-        options=dict(
-            pos_x=f'{RIGHT_LAUNCH_X}mm',
-            pos_y=f'{LAUNCH_Y}mm',
-            orientation='180',
-            trace_width=TRACE_WIDTH,
-            trace_gap=TRACE_GAP,
-        ),
+        design, 'right_launch',
+        options=dict(pos_x=f'{right_pos_x}mm', pos_y=f'{LAUNCH_Y}mm',
+                     orientation='180', trace_width=TRACE_WIDTH, trace_gap=TRACE_GAP)
     )
 
-    left_tie = point(left_launch.pins['tie']['middle'])
-    right_tie = point(right_launch.pins['tie']['middle'])
+    left_tie = pt(left_launch.pins['tie']['middle'])
+    right_tie = pt(right_launch.pins['tie']['middle'])
+    print('left_launch.tie =', left_tie)
+    print('right_launch.tie =', right_tie)
 
-    print(f'left_launch.tie  = {left_tie}')
-    print(f'right_launch.tie = {right_tie}')
+    if not np.allclose(left_tie, g['left_tie'], atol=1e-6):
+        raise ValueError('Adjust LAUNCH_TIE_INSET for this Qiskit Metal version')
 
-    routes, stubs, nodes = generate_routes(left_tie, right_tie)
-    validate_geometry(routes, stubs, nodes)
-
+    routes, stubs = generate_routes(left_tie, right_tie, g)
+    validate(routes, g, left_tie, right_tie)
     t1, t2, t3, t4, t5, t6 = routes
+
     tree_config = [
         {'name': 'j1_to_j4', 'path': t1},
         {'name': 'j4_to_j2', 'path': t2},
@@ -384,17 +252,10 @@ def main():
     ] + [dict(name=name, **config) for name, config in stubs.items()]
 
     tree = TreeRoute(
-        design=design,
-        name='parameterized_filter',
-        tree_config=tree_config,
-        trace_width=TRACE_WIDTH,
-        trace_gap=TRACE_GAP,
-        fillet=FILLET,
-        lead_in='0mm',
-        lead_out='0mm',
+        design=design, name='parameterized_filter_latest', tree_config=tree_config,
+        trace_width=TRACE_WIDTH, trace_gap=TRACE_GAP, fillet=FILLET,
+        lead_in='0mm', lead_out='0mm'
     )
-
-    print('TreeRoute created successfully.')
 
     if ENABLE_GUI and MetalGUI is not None:
         gui = MetalGUI(design)
