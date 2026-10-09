@@ -16,19 +16,19 @@ ENABLE_GUI = os.environ.get('ENABLE_GUI', 'True').lower() == 'true'
 a1 = 2.10
 a2 = 2.00
 a3 = 2.30
-b = 0.40
+b = 0.45
 c = 0.85
 d = 0.20
 delta = -0.1
-n = 5
+n = 2
 
-lp1 = 1.13
-lp2 = 0.08
-lp3 = 0.21
-lp4 = 0.10
-lp5 = 0.21
-lp6 = 0.08
-lp7 = 1.13
+lp1 = 1.13357
+lp2 = 0.211113
+lp3 = 0.104681
+lp4 = 0.826346
+lp5 = 0.104681
+lp6 = 0.211113
+lp7 = 1.13357
 
 LAUNCH_Y = -3.00
 LAUNCH_TIE_INSET = 0.025
