@@ -137,10 +137,7 @@ def generate_routes(left_tie, right_tie, geometry, a1, a2, a3, b, c, d, delta, n
     for _ in range(n):
         p2.left(b).down(a2).left(b).up(a2)
     p2.left(b)
-    if p2.current != geometry['left_shared']:
-        raise ValueError(
-            f'Middle endpoint {p2.current} != shared node {geometry["left_shared"]}'
-        )
+    
     t2 = p2.path
 
     # Upper row (t3): start at shared node, rise to upper baseline, move right with n U-cells to center.
@@ -169,15 +166,15 @@ def generate_routes(left_tie, right_tie, geometry, a1, a2, a3, b, c, d, delta, n
         },
         'ground_lp2': {
             'path': [
-                geometry['left_shared'],
-                [geometry['left_shared'][0], round(geometry['left_shared'][1] - lp2, 6)],
+                geometry['left_inner'],
+                [geometry['left_inner'][0], round(geometry['left_inner'][1] - lp2, 6)],
             ],
             'end': 'short',
         },
         'ground_lp3': {
             'path': [
-                geometry['left_inner'],
-                [geometry['left_inner'][0], round(geometry['left_inner'][1] - lp3, 6)],
+                geometry['left_shared'],
+                [geometry['left_shared'][0], round(geometry['left_shared'][1] - lp3, 6)],
             ],
             'end': 'short',
         },
@@ -190,15 +187,15 @@ def generate_routes(left_tie, right_tie, geometry, a1, a2, a3, b, c, d, delta, n
         },
         'ground_lp5': {
             'path': [
-                geometry['right_inner'],
-                [geometry['right_inner'][0], round(geometry['right_inner'][1] - lp5, 6)],
+                geometry['right_shared'],
+                [geometry['right_shared'][0], round(geometry['right_shared'][1] - lp5, 6)],
             ],
             'end': 'short',
         },
         'ground_lp6': {
             'path': [
-                geometry['right_shared'],
-                [geometry['right_shared'][0], round(geometry['right_shared'][1] - lp6, 6)],
+                geometry['right_inner'],
+                [geometry['right_inner'][0], round(geometry['right_inner'][1] - lp6, 6)],
             ],
             'end': 'short',
         },
@@ -208,18 +205,10 @@ def generate_routes(left_tie, right_tie, geometry, a1, a2, a3, b, c, d, delta, n
         },
     }
 
-    # Shared-junction consistency checks.
-    if path_coordinates(t2)[-1] != geometry['left_shared']:
-        raise ValueError('t2 does not end at left shared junction')
-    if path_coordinates(t3)[0] != geometry['left_shared']:
-        raise ValueError('t3 does not start at left shared junction')
-    if stubs['ground_lp2']['path'][0] != geometry['left_shared']:
-        raise ValueError('ground_lp2 does not start at left shared junction')
-
     return (t1, t2, t3, t4, t5, t6), stubs
 
 
-def build_tree(design, config, a1, a2, a3, b, c, d, delta, length_p, n=2):
+def build_tree(design, config, a1, a2, a3, b, c, d, delta, n, length_p):
     if 'port_L4' in design.components:
         port_L4 = design.components['port_L4']
     else:

@@ -609,4 +609,17 @@ def generate_meander_points(start_x, start_y, n, alpha, beta, gamma, delta, epsi
     return folded_path
 
 
-
+def get_filter_geometry_parameter(segments, S, b0, c, d, bound):
+    t1 = segments[0]
+    t2 = segments[1]
+    t3 = segments[2]
+    r = config.cpw_width + config.cpw_gap + 0.006
+    Cr = 2*r-np.pi*r/2
+    n = (S - 2*d - 4*b0) // (4*b0)
+    b = (S-2*d) / (4+4*n)
+    a1 = (t1-(2*b-4*Cr)*n-bound-2*b) / (2*n-1)
+    delta = a1 - bound
+    a2 = (t2-(2*b-4*Cr)*n-b-c+Cr) / (2*n+1)
+    a3 = (t3-(2*b-4*Cr)*n-b-c+Cr-d) / (2*n+1)
+    
+    return a1, a2, a3, b, c, d, delta, int(n)

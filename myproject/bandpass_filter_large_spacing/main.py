@@ -27,14 +27,6 @@ def main():
     # ==========================================
     r = config.cpw_width/2 + config.cpw_gap + 0.006                     # 轉角圓弧半徑 Fillet R
     
-    # 幾何參數
-    a1 = 2.10
-    a2 = 2.00
-    a3 = 2.30
-    b = 0.45
-    c = 0.85
-    d = 0.20
-    delta = -0.1
 
     # 只需要在這裡輸入各段距離和對應的長度
     segments = [8652.57, 9563.69, 9691.28, 9691.28, 9563.69, 8652.57]
@@ -45,19 +37,22 @@ def main():
     length_p = [x / 1000 for x in length_p] # 轉換單位
     import os
     import json
+    import utils
     
     layout_builder.build_ports(design, config)
     if 'port_L4' in design.components: port_L4 = design.components['port_L4']
     if 'port_R4' in design.components: port_R4 = design.components['port_R4']
     S_target = abs(port_R4.pins['tie']['middle'][0] - port_L4.pins['tie']['middle'][0])  # 目標水平總跨距 S
     print("S_target: ", S_target)
-    layout_builder.build_tree(design, config, a1, a2, a3, b, c, d, delta, length_p)
+    a1, a2, a3, b, c, d, delta, n = utils.get_filter_geometry_parameter(segments, S=S_target, b0=0.4, c=0.2, d=0.25, bound=1.2)
+    print(a1, a2, a3, b, c, d, delta, n)
+    layout_builder.build_tree(design, config, a1, a2, a3, b, c, d, delta, n, length_p)
     #layout_builder.build_transmission_lines(design, config)
     #layout_builder.build_qubits(design, config)
     #layout_builder.build_resonators(design, config)
     #layout_builder.build_bias_lines(design, config)
     #layout_builder.build_coupling_pad(design, config, folded_path, n_folds, folded_TL)
-    #layout_builder.build_markers(design, config)
+    layout_builder.build_markers(design, config)
 
     # ==========================================
     # 3. 刷新 GUI 並截圖
