@@ -19,7 +19,7 @@ a3 = 2.30                    # upper-row U depth
 b = 0.60                     # every small horizontal segment
 c = 0.85                     # clear vertical gap between adjacent rows
 d = 0.40                     # half of the center opening, total opening = 2*d
-delta = 1.05                 # vertical offset after the straight launch segment
+delta = 0.5                 # vertical offset after the straight launch segment
 n = 3                        # complete U periods in each half-row
 
 # Ground-stub lengths, ordered from the leftmost node to the rightmost node.
@@ -226,12 +226,18 @@ def generate_routes(left_tie, right_tie, geometry):
         raise ValueError(f't2 endpoint {p2.current} != {geometry["left_outer"]}')
     t2 = p2.path
 
-    # t3: left outer node -> upper baseline -> upper row -> center.
-    # The final d section and its mirror form the center opening 2*d.
+    # t3: left outer node -> move left b -> rise -> upper row -> center.
+    # The sketch requires the outer upper transition to move one b farther
+    # left before rising. This shifts the upper meander into the correct phase
+    # relative to the middle row.
     p3 = PathBuilder(geometry['left_outer'])
+    p3.move(dx=-b)
     p3.to_y(geometry['upper_baseline'])
     add_u_cells_from_horizontal(p3, n, 'right', a3)
-    p3.move(dx=d)
+
+    # Because the upper row was shifted left by b, the final center section is
+    # b + d. Its mirrored counterpart produces the intended symmetric center.
+    p3.move(dx=b + d)
     if not np.allclose(p3.current, geometry['center'], atol=1e-6):
         raise ValueError(f't3 endpoint {p3.current} != {geometry["center"]}')
     t3 = p3.path
@@ -335,10 +341,28 @@ def validate_geometry(routes, geometry, left_tie, right_tie):
                 allowed = np.isclose(dx, b, atol=1e-6)
                 if name == 't1' and index == 0:
                     allowed = np.isclose(dx, 2.0 * b, atol=1e-6)
+                if name == 't3' and index == 0:
+                    allowed = np.isclose(dx, b, atol=1e-6)
                 if name == 't3' and index == len(route_points) - 2:
-                    allowed = np.isclose(dx, d, atol=1e-6)
+                    allowed = np.isclose(dx, b + d, atol=1e-6)
                 if not allowed:
                     raise ValueError(f'{name} horizontal segment {index} has width {dx}')
+
+    # Upper-row alignment: from the left outer red node, first move left b,
+    # then rise vertically. The center closing segment must be b + d.
+    upper = path_coordinates(t3)
+    if not (
+        np.isclose(upper[1][0] - upper[0][0], -b, atol=1e-6)
+        and np.isclose(upper[1][1] - upper[0][1], 0.0, atol=1e-6)
+    ):
+        raise ValueError('Upper route must move left by b before rising')
+    if not (
+        np.isclose(upper[2][0] - upper[1][0], 0.0, atol=1e-6)
+        and upper[2][1] > upper[1][1]
+    ):
+        raise ValueError('Upper route must rise vertically after the left-b segment')
+    if not np.isclose(upper[-1][0] - upper[-2][0], b + d, atol=1e-6):
+        raise ValueError('Upper center closing segment must equal b + d')
 
     if not np.isclose(
         geometry['right_inner'][0] - geometry['left_inner'][0],
@@ -352,6 +376,8 @@ def validate_geometry(routes, geometry, left_tie, right_tie):
     print(f'  each small horizontal segment b = {b} mm')
     print(f'  launch straight length = 2*b = {2*b} mm')
     print(f'  center opening = 2*d = {2*d} mm')
+    print(f'  upper outer offset = b = {b} mm')
+    print(f'  upper center closing length = b+d = {b+d} mm')
     print(f'  delta = {delta} mm')
 
 
@@ -413,7 +439,7 @@ def main():
 
     tree = TreeRoute(
         design=design,
-        name='overlap_fixed_filter',
+        name='upper_alignment_fixed_filter',
         tree_config=tree_config,
         trace_width=TRACE_WIDTH,
         trace_gap=TRACE_GAP,
