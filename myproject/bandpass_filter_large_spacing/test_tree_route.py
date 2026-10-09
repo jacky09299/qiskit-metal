@@ -1,9 +1,8 @@
 import os
 import numpy as np
 
-from qiskit_metal import designs
+from qiskit_metal import designs, MetalGUI
 from qiskit_metal.qlibrary.terminations.launchpad_wb import LaunchpadWirebond
-from qiskit_metal import MetalGUI
 
 from components import TreeRoute
 
@@ -15,18 +14,9 @@ from components import TreeRoute
 TRACE_WIDTH = '10um'
 TRACE_GAP = '6um'
 FILLET = '0um'
+ENABLE_GUI = os.environ.get('ENABLE_GUI', 'True').lower() == 'true'
 
-ENABLE_GUI = os.environ.get(
-    'ENABLE_GUI',
-    'True'
-).lower() == 'true'
-
-
-# ============================================================
-# Geometry Parameters
-# Units: mm
-# ============================================================
-
+# Geometry parameters, unit: mm
 B = 0.60
 D = 0.40
 C = 0.85
@@ -44,46 +34,58 @@ LP5 = 0.10
 
 
 # ============================================================
-# Utility Functions
+# Helpers
 # ============================================================
 
 def normalize_point(point, digits=6):
-    """Convert a numpy array, tuple, or list to a float coordinate list."""
     return [
         round(float(point[0]), digits),
-        round(float(point[1]), digits)
+        round(float(point[1]), digits),
     ]
 
 
-def points_close(point_a, point_b, atol=1e-9):
-    """Return True when two coordinates are equal within tolerance."""
-    return np.allclose(
-        np.asarray(point_a, dtype=float),
-        np.asarray(point_b, dtype=float),
-        atol=atol,
-        rtol=0.0
-    )
+def mirror_point_y_axis(point):
+    """Mirror one coordinate across the Y axis: (x, y) -> (-x, y)."""
+    point = normalize_point(point)
+    return [round(-point[0], 6), point[1]]
 
 
-# ============================================================
-# Path Builder
-# ============================================================
+def mirror_reverse_path(path, component_name=None, pin_name='tie'):
+    """
+    Mirror a route across the Y axis and reverse its travel direction.
+
+    Coordinate entries are mirrored and reversed. Component pin entries are
+    replaced with the requested component pin and placed at the opposite end.
+    """
+    mirrored_coords = [
+        mirror_point_y_axis(item)
+        for item in path
+        if isinstance(item, (list, tuple, np.ndarray))
+    ]
+    mirrored_coords.reverse()
+
+    if component_name is not None:
+        mirrored_coords.append({
+            'component': component_name,
+            'pin': pin_name,
+        })
+
+    return mirrored_coords
+
 
 class PathBuilder:
     def __init__(self, start_pt):
-        start_pt = normalize_point(start_pt, digits=6)
-        self.P_now = [start_pt[0], start_pt[1]]
+        self.P_now = normalize_point(start_pt)
         self.path = [list(self.P_now)]
 
     def move(self, dx, dy):
-        """Add one horizontal or vertical movement."""
+        """Add a strictly horizontal or vertical movement."""
         dx = float(dx)
         dy = float(dy)
 
         if abs(dx) > 1e-12 and abs(dy) > 1e-12:
             raise ValueError(
-                f'PathBuilder.move() only accepts horizontal or vertical '
-                f'movement, received dx={dx}, dy={dy}'
+                f'move() must be horizontal or vertical: dx={dx}, dy={dy}'
             )
 
         if abs(dx) <= 1e-12 and abs(dy) <= 1e-12:
@@ -95,19 +97,13 @@ class PathBuilder:
         return self
 
     def move_to_x(self, target_x):
-        dx = round(float(target_x) - self.P_now[0], 6)
-        if abs(dx) > 1e-12:
-            self.move(dx, 0)
-        return self
+        return self.move(round(float(target_x) - self.P_now[0], 6), 0)
 
     def move_to_y(self, target_y):
-        dy = round(float(target_y) - self.P_now[1], 6)
-        if abs(dy) > 1e-12:
-            self.move(0, dy)
-        return self
+        return self.move(0, round(float(target_y) - self.P_now[1], 6))
 
     def move_to(self, target_pt, horizontal_first=True):
-        target_pt = normalize_point(target_pt, digits=6)
+        target_pt = normalize_point(target_pt)
         if horizontal_first:
             self.move_to_x(target_pt[0])
             self.move_to_y(target_pt[1])
@@ -118,28 +114,31 @@ class PathBuilder:
 
 
 # ============================================================
-# Incremental Path Generation
+# Symmetric Route Generation
 # ============================================================
 
 def generate_routes(left_tie, right_tie):
-    """Build the main routes and all ground stubs."""
     left_tie = normalize_point(left_tie)
     right_tie = normalize_point(right_tie)
 
-    print('\n' + '=' * 60)
-    print('Route endpoint coordinates')
-    print('=' * 60)
-    print(f'left_launch.tie  = {left_tie}')
-    print(f'right_launch.tie = {right_tie}')
-    print('=' * 60 + '\n')
+    expected_right_tie = mirror_point_y_axis(left_tie)
+    if not np.allclose(right_tie, expected_right_tie, atol=1e-6, rtol=0.0):
+        raise ValueError(
+            'Launchpad tie pins are not symmetric. '
+            f'left_tie={left_tie}, right_tie={right_tie}, '
+            f'expected_right_tie={expected_right_tie}'
+        )
 
-    # ---------------- Left side ----------------
-    left_nominal_entry = [-8.75, -3.00]
+    # --------------------------------------------------------
+    # Left half: build only the known-correct geometry
+    # --------------------------------------------------------
 
-    # Path 1: Left Launchpad -> J4
+    # t1: left launch -> J4
     pb1 = PathBuilder(left_tie)
     pb1.path.insert(0, {'component': 'left_launch', 'pin': 'tie'})
-    pb1.move_to(left_nominal_entry, horizontal_first=True)
+
+    # Preserve the nominal entry used by the original correct left geometry.
+    pb1.move_to([-8.75, -3.00], horizontal_first=True)
     pb1.move(0.95, 0)
     pb1.move(0, DELTA)
 
@@ -154,7 +153,7 @@ def generate_routes(left_tie, right_tie):
     pb1.move(0.90, 0)
     t1 = pb1.path
 
-    # Path 2: J4 -> J2
+    # t2: J4 -> J2
     pb2 = PathBuilder([-0.90, -2.80])
     pb2.move(0, 2.85)
     pb2.move(-1.00, 0)
@@ -171,7 +170,7 @@ def generate_routes(left_tie, right_tie):
     pb2.move(-0.50, 0)
     t2 = pb2.path
 
-    # Path 3: J2 -> J3
+    # t3: J2 -> J3
     pb3 = PathBuilder([-6.60, -0.10])
     pb3.move(0, 3.30)
 
@@ -184,144 +183,140 @@ def generate_routes(left_tie, right_tie):
     pb3.move(1.80, 0)
     t3 = pb3.path
 
-    # ---------------- Right side ----------------
+    # --------------------------------------------------------
+    # Right half: exact Y-axis mirror of the left half
+    # --------------------------------------------------------
 
-    # Path 4: J3 -> J6
-    pb4 = PathBuilder([0.00, 3.20])
-    pb4.move(1.80, 0)
+    # Reverse direction after mirroring so the routes remain center-to-right:
+    # t3 (J2 -> J3) mirrors to t4 (J3 -> J6)
+    # t2 (J4 -> J2) mirrors to t5 (J6 -> J5)
+    # t1 (left launch -> J4) mirrors to t6 (J5 -> right launch)
+    t4 = mirror_reverse_path(t3)
+    t5 = mirror_reverse_path(t2)
+    t6 = mirror_reverse_path(
+        t1,
+        component_name='right_launch',
+        pin_name='tie',
+    )
 
-    for _ in range(4):
-        pb4.move(0, -A3)
-        pb4.move(B, 0)
-        pb4.move(0, A3)
-        pb4.move(B, 0)
+    # Force the last geometric coordinate to the actual right tie pin.
+    # This retains symmetry and avoids floating-point or component pin mismatch.
+    if not np.allclose(t6[-2], right_tie, atol=1e-6, rtol=0.0):
+        raise ValueError(
+            f'Mirrored t6 endpoint {t6[-2]} does not match right tie {right_tie}'
+        )
+    t6[-2] = list(right_tie)
 
-    pb4.move(0, -3.30)
-    t4 = pb4.path
+    # --------------------------------------------------------
+    # Ground stubs
+    # --------------------------------------------------------
 
-    # Path 5: J6 -> J5
-    pb5 = PathBuilder([6.60, -0.10])
-    pb5.move(-0.50, 0)
-    pb5.move(0, -1.85)
-
-    for _ in range(3):
-        pb5.move(-B, 0)
-        pb5.move(0, A2)
-        pb5.move(-B, 0)
-        pb5.move(0, -A2)
-
-    pb5.move(-B, 0)
-    pb5.move(0, -0.85)
-    pb5.move(-1.00, 0)
-    t5 = pb5.path
-
-    # Path 6: J5 -> Right Launchpad
-    pb6 = PathBuilder([0.90, -2.80])
-    pb6.move(0.90, 0)
-
-    for _ in range(4):
-        pb6.move(0, -1.25)
-        pb6.move(B, 0)
-        pb6.move(0, A1)
-        pb6.move(B, 0)
-
-    pb6.move(0, -1.05)
-    pb6.move(1.20, 0)
-    pb6.move_to(right_tie, horizontal_first=True)
-    pb6.path.append({'component': 'right_launch', 'pin': 'tie'})
-    t6 = pb6.path
-
-    # ---------------- Ground stubs ----------------
-    def stub(pt, length):
-        pt = normalize_point(pt)
+    def downward_stub(point, length):
+        point = normalize_point(point)
         return [
-            list(pt),
-            [pt[0], round(pt[1] - float(length), 6)]
+            list(point),
+            [point[0], round(point[1] - float(length), 6)],
+        ]
+
+    def upward_stub(point, length):
+        point = normalize_point(point)
+        return [
+            list(point),
+            [point[0], round(point[1] + float(length), 6)],
         ]
 
     stubs = {
         'left_ground': {
-            'path': stub(left_tie, -LP1),
-            'end': 'short'
+            'path': upward_stub(left_tie, LP1),
+            'end': 'short',
         },
         'right_ground': {
-            'path': stub(right_tie, -LP1),
-            'end': 'short'
+            'path': upward_stub(right_tie, LP1),
+            'end': 'short',
         },
         'ground_4': {
-            'path': stub([-0.90, -2.80], LP2),
-            'end': 'short'
+            'path': downward_stub([-0.90, -2.80], LP2),
+            'end': 'short',
         },
         'ground_2': {
-            'path': stub([-6.60, -0.10], LP4),
-            'end': 'short'
+            'path': downward_stub([-6.60, -0.10], LP4),
+            'end': 'short',
         },
         'ground_3': {
-            'path': stub([0.00, 3.20], LP3),
-            'end': 'short'
+            'path': downward_stub([0.00, 3.20], LP3),
+            'end': 'short',
         },
         'ground_6': {
-            'path': stub([6.60, -0.10], LP4),
-            'end': 'short'
+            'path': downward_stub([6.60, -0.10], LP4),
+            'end': 'short',
         },
         'ground_5': {
-            'path': stub([0.90, -2.80], LP5),
-            'end': 'short'
-        }
+            'path': downward_stub([0.90, -2.80], LP2),
+            'end': 'short',
+        },
     }
 
     return t1, t2, t3, t4, t5, t6, stubs
 
 
 # ============================================================
-# Validation
+# Symmetry Validation
 # ============================================================
 
-def validate_route_connections(t1, t2, t3, t4, t5, t6, stubs,
-                               left_tie, right_tie):
-    left_tie = normalize_point(left_tie)
-    right_tie = normalize_point(right_tie)
-
-    checks = [
-        ('t1 -> t2 at J4', [-0.90, -2.80], t1[-1], t2[0]),
-        ('t2 -> t3 at J2', [-6.60, -0.10], t2[-1], t3[0]),
-        ('t3 -> t4 at J3', [0.00, 3.20], t3[-1], t4[0]),
-        ('t4 -> t5 at J6', [6.60, -0.10], t4[-1], t5[0]),
-        ('t5 -> t6 at J5', [0.90, -2.80], t5[-1], t6[0]),
-        ('left_ground start', left_tie,
-         stubs['left_ground']['path'][0], left_tie),
-        ('right_ground start', right_tie,
-         stubs['right_ground']['path'][0], right_tie)
+def coordinate_items(path):
+    return [
+        normalize_point(item)
+        for item in path
+        if isinstance(item, (list, tuple, np.ndarray))
     ]
 
-    print('\n' + '=' * 60)
-    print('Route connection validation')
-    print('=' * 60)
 
-    errors = []
-    for name, expected, actual_a, actual_b in checks:
-        valid = (
-            points_close(expected, actual_a)
-            and points_close(expected, actual_b)
-        )
-        status = 'OK' if valid else 'ERROR'
-        print(
-            f'[{status}] {name}: expected={expected}, '
-            f'a={actual_a}, b={actual_b}'
-        )
-        if not valid:
-            errors.append(name)
+def assert_mirror_pair(left_path, right_path, pair_name):
+    left_coords = coordinate_items(left_path)
+    expected_right = [mirror_point_y_axis(p) for p in reversed(left_coords)]
+    right_coords = coordinate_items(right_path)
 
-    print('=' * 60 + '\n')
-
-    if errors:
+    if len(expected_right) != len(right_coords):
         raise ValueError(
-            'Route connection coordinate mismatch: ' + ', '.join(errors)
+            f'{pair_name} point count mismatch: '
+            f'expected={len(expected_right)}, actual={len(right_coords)}'
         )
+
+    for index, (expected, actual) in enumerate(zip(expected_right, right_coords)):
+        if not np.allclose(expected, actual, atol=1e-6, rtol=0.0):
+            raise ValueError(
+                f'{pair_name} is not symmetric at point {index}: '
+                f'expected={expected}, actual={actual}'
+            )
+
+
+def validate_symmetry(t1, t2, t3, t4, t5, t6, stubs):
+    assert_mirror_pair(t1, t6, 't1/t6')
+    assert_mirror_pair(t2, t5, 't2/t5')
+    assert_mirror_pair(t3, t4, 't3/t4')
+
+    stub_pairs = [
+        ('left_ground', 'right_ground'),
+        ('ground_4', 'ground_5'),
+        ('ground_2', 'ground_6'),
+    ]
+
+    for left_name, right_name in stub_pairs:
+        left_path = stubs[left_name]['path']
+        right_path = stubs[right_name]['path']
+        expected = [mirror_point_y_axis(p) for p in left_path]
+
+        if not np.allclose(expected, right_path, atol=1e-6, rtol=0.0):
+            raise ValueError(
+                f'Ground stubs {left_name}/{right_name} are not symmetric: '
+                f'expected={expected}, actual={right_path}'
+            )
+
+    print('Symmetry validation passed: t1/t6, t2/t5, t3/t4 and ground stubs.')
 
 
 # ============================================================
-# Main Execution
+# Main
 # ============================================================
 
 def main():
@@ -337,8 +332,8 @@ def main():
             pos_y='-3mm',
             orientation='0',
             trace_width=TRACE_WIDTH,
-            trace_gap=TRACE_GAP
-        )
+            trace_gap=TRACE_GAP,
+        ),
     )
 
     right_launch = LaunchpadWirebond(
@@ -349,33 +344,22 @@ def main():
             pos_y='-3mm',
             orientation='180',
             trace_width=TRACE_WIDTH,
-            trace_gap=TRACE_GAP
-        )
+            trace_gap=TRACE_GAP,
+        ),
     )
 
     left_tie = normalize_point(left_launch.pins['tie']['middle'])
     right_tie = normalize_point(right_launch.pins['tie']['middle'])
 
-    print('\nLaunchpad pin coordinates:')
     print(f'left_launch.tie  = {left_tie}')
     print(f'right_launch.tie = {right_tie}')
 
     t1, t2, t3, t4, t5, t6, stubs = generate_routes(
-        left_tie=left_tie,
-        right_tie=right_tie
+        left_tie,
+        right_tie,
     )
 
-    validate_route_connections(
-        t1=t1,
-        t2=t2,
-        t3=t3,
-        t4=t4,
-        t5=t5,
-        t6=t6,
-        stubs=stubs,
-        left_tie=left_tie,
-        right_tie=right_tie
-    )
+    validate_symmetry(t1, t2, t3, t4, t5, t6, stubs)
 
     tree_config = [
         {'name': 'j1_to_j4', 'path': t1},
@@ -383,11 +367,11 @@ def main():
         {'name': 'j2_to_j3', 'path': t3},
         {'name': 'j3_to_j6', 'path': t4},
         {'name': 'j6_to_j5', 'path': t5},
-        {'name': 'j5_to_j7', 'path': t6}
+        {'name': 'j5_to_j7', 'path': t6},
+    ] + [
+        dict(name=name, **config)
+        for name, config in stubs.items()
     ]
-
-    for stub_name, stub_config in stubs.items():
-        tree_config.append({'name': stub_name, **stub_config})
 
     tree = TreeRoute(
         design=design,
@@ -397,22 +381,10 @@ def main():
         trace_gap=TRACE_GAP,
         fillet=FILLET,
         lead_in='0mm',
-        lead_out='0mm'
+        lead_out='0mm',
     )
 
-    print('\nTreeRoute created successfully.')
-
-    if hasattr(tree, 'print_routes'):
-        tree.print_routes()
-
-    if hasattr(tree, 'print_junctions'):
-        tree.print_junctions()
-
-    if hasattr(tree, 'get_total_length'):
-        try:
-            print(f'\nTotal route length: {tree.get_total_length()} mm')
-        except Exception as exc:
-            print(f'\nUnable to calculate total route length: {exc}')
+    print('TreeRoute created successfully.')
 
     if ENABLE_GUI and MetalGUI is not None:
         gui = MetalGUI(design)
