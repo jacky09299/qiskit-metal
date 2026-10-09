@@ -42,12 +42,11 @@ def main():
     if 'port_R4' in design.components: port_R4 = design.components['port_R4']
     S_target = abs(port_R4.pins['tie']['middle'][0] - port_L4.pins['tie']['middle'][0])  # 目標水平總跨距 S
     print("S_target: ", S_target)
-    folded_path, start_x, start_y, n_folds, folded_TL, solution = layout_builder.build_folded_tl(design, config, L_target, S_target, p, r, solution)
-    
-    layout_builder.build_transmission_lines(design, config)
-    layout_builder.build_qubits(design, config)
-    layout_builder.build_resonators(design, config)
-    layout_builder.build_bias_lines(design, config)
+    layout_builder.build_tree(design, config, a1,a2,a3,b,c,d,delta,length_p)
+    #layout_builder.build_transmission_lines(design, config)
+    #layout_builder.build_qubits(design, config)
+    #layout_builder.build_resonators(design, config)
+    #layout_builder.build_bias_lines(design, config)
     #layout_builder.build_coupling_pad(design, config, folded_path, n_folds, folded_TL)
     #layout_builder.build_markers(design, config)
 
