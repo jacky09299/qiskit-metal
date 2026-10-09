@@ -46,47 +46,13 @@ EXPECTED_VIRTUAL_JUNCTIONS = 5
 
 
 # ============================================================
-# Launchpad used as J1/J7
-# ============================================================
-
-class BranchLaunchpadWirebond(LaunchpadWirebond):
-    """Launchpad endpoint with separate main and ground routing pins.
-    """
-
-    def make(self):
-        super().make()
-
-        tie = self.pins['tie']
-        middle = np.asarray(tie['middle'], dtype=float)
-        main_normal = np.asarray(tie['normal'], dtype=float)
-        main_normal /= np.linalg.norm(main_normal)
-        width = float(tie['width'])
-        step = 0.01
-
-        self.add_pin(
-            'main',
-            [middle - main_normal * step, middle],
-            width,
-            input_as_norm=True
-        )
-
-        down = np.array([0.0, -1.0], dtype=float)
-        self.add_pin(
-            'ground',
-            [middle - down * step, middle],
-            width,
-            input_as_norm=True
-        )
-
-
-# ============================================================
 # Path generators for routes
 # ============================================================
 
 def bottom_left_path():
     """J1 -> J4: lower-left meander."""
     return [
-        {'component': 'left_launch', 'pin': 'main'},
+        {'component': 'left_launch', 'pin': 'tie'},
         [J1[0] + 0.45, J1[1]],
         [-7.80, J1[1]],
         [-7.80, Y_BOTTOM_HIGH],
@@ -243,7 +209,7 @@ def bottom_right_path():
         [6.60, Y_BOTTOM_LOW],
         [7.20, J7[1]],
         [J7[0] - 0.45, J7[1]],
-        {'component': 'right_launch', 'pin': 'main'}
+        {'component': 'right_launch', 'pin': 'tie'}
     ]
 
 
@@ -252,7 +218,7 @@ def bottom_right_path():
 # ============================================================
 
 def create_launchpads(design):
-    left = BranchLaunchpadWirebond(
+    left = LaunchpadWirebond(
         design,
         'left_launch',
         options=dict(
@@ -269,7 +235,7 @@ def create_launchpads(design):
         )
     )
 
-    right = BranchLaunchpadWirebond(
+    right = LaunchpadWirebond(
         design,
         'right_launch',
         options=dict(
@@ -310,18 +276,16 @@ def build_tree_config():
         {'name': 'ground_5', 'path': [J5.tolist(), [J5[0], J5[1] - 0.104681]], 'end': 'short'},
         {'name': 'ground_6', 'path': [J6.tolist(), [J6[0], J6[1] - 0.211113]], 'end': 'short'},
 
-        # 2 Launchpad ground routes to auto-created ShortToGround
+        # 2 Launchpad ground routes (branching from J1 and J7 on main routes j1_to_j4 and j5_to_j7)
         {
             'name': 'left_ground',
-            'start': {'component': 'left_launch', 'pin': 'ground'},
-            'end': 'short',
-            'path': [[J1[0], J1[1] - 1.13357]]
+            'path': [J1.tolist(), [J1[0], J1[1] + 1.13357]],
+            'end': 'short'
         },
         {
             'name': 'right_ground',
-            'start': {'component': 'right_launch', 'pin': 'ground'},
-            'end': 'short',
-            'path': [[J7[0], J7[1] - 1.13357]]
+            'path': [J7.tolist(), [J7[0], J7[1] + 1.13357]],
+            'end': 'short'
         }
     ]
 

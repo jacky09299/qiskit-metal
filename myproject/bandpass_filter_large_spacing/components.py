@@ -228,10 +228,11 @@ class TreeRoute:
     功能：
     --------------------------------------------------
     1. 使用者直接定義走線的完整路徑 (`path`)，包含頭尾與中間折點。
-    2. 自動比對節點座標，當多條走線在某個座標相交重疊時，自動建立 `VirtualJunction`。
-    3. 當走線端點設定為 short (或寫 'short')，自動推算向度並建立 `ShortToGround` (命名為 `{route_name}__stg`)。
-    4. 自動從完整 `path` 中抽離中間折點作為 `RouteAnchors` 的 `anchors`。
-    5. 無折點時使用 `RouteStraight`。
+    2. 自動比對節點座標，當多條走線在某個座標相交重疊且未連接外部元件時，自動建立 `VirtualJunction`。
+    3. 若相交座標有走線連接至外部元件或屬於既有走線上的點，自動在該走線上 `add_pin` 作為分支走線的起終點。
+    4. 當走線端點設定為 short (或寫 'short')，自動推算向度並建立 `ShortToGround` (命名為 `{route_name}__stg`)。
+    5. 自動從完整 `path` 中抽離中間折點作為 `RouteAnchors` 的 `anchors`。
+    6. 無折點時使用 `RouteStraight`。
     """
 
     def __init__(
@@ -249,8 +250,8 @@ class TreeRoute:
         self.name = name
         self.tree_config = tree_config
 
-        self.trace_width = trace_width
-        self.trace_gap = trace_gap
+        self.trace_width = design.parse_value(trace_width)
+        self.trace_gap = design.parse_value(trace_gap)
 
         self.fillet = fillet
 
@@ -341,7 +342,7 @@ class TreeRoute:
             return
 
         parsed_routes = []
-        coord_usage = {}
+        endpoint_coord_usage = {}
         comp_pin_coords = set()
 
         for idx, r_spec in enumerate(route_list):
@@ -370,8 +371,6 @@ class TreeRoute:
             default_end_coord = middle_coords[-1] if middle_coords else (start_data if start_type == 'coord' else None)
             end_type, end_data = self._parse_endpoint(end_spec, default_end_coord)
 
-            # If start or end is 'short' or 'component', but path contains the endpoint coordinate,
-            # trim duplicate coordinates from middle_coords.
             if start_type in ('component', 'short') and start_data is not None and len(middle_coords) > 0:
                 if np.allclose(middle_coords[0], start_data if start_type == 'short' else start_data['coord']):
                     middle_coords = middle_coords[1:]
@@ -409,20 +408,20 @@ class TreeRoute:
             start_key = (round(start_coord[0], 6), round(start_coord[1], 6))
             if start_type not in ('component', 'short'):
                 next_pt = full_coords[1] if len(full_coords) > 1 else start_coord
-                if start_key not in coord_usage:
-                    coord_usage[start_key] = []
-                coord_usage[start_key].append((idx, 'start', next_pt, start_coord))
+                if start_key not in endpoint_coord_usage:
+                    endpoint_coord_usage[start_key] = []
+                endpoint_coord_usage[start_key].append((idx, 'start', next_pt, start_coord))
 
             end_coord = full_coords[-1]
             end_key = (round(end_coord[0], 6), round(end_coord[1], 6))
             if end_type not in ('component', 'short'):
                 prev_pt = full_coords[-2] if len(full_coords) > 1 else end_coord
-                if end_key not in coord_usage:
-                    coord_usage[end_key] = []
-                coord_usage[end_key].append((idx, 'end', prev_pt, end_coord))
+                if end_key not in endpoint_coord_usage:
+                    endpoint_coord_usage[end_key] = []
+                endpoint_coord_usage[end_key].append((idx, 'end', prev_pt, end_coord))
 
-        # 1. Create VirtualJunctions for shared coordinates
-        for coord_key, connections in coord_usage.items():
+        # 1. Create VirtualJunctions for shared coordinates where NO route connects to an external component
+        for coord_key, connections in endpoint_coord_usage.items():
             if len(connections) >= 2 and coord_key not in comp_pin_coords:
                 jx, jy = connections[0][3]
                 j_base_name = f"{self.name}_junc_{len(self.junctions) + 1}"
@@ -499,14 +498,46 @@ class TreeRoute:
                 r_item['end_type'] = 'short_obj'
                 r_item['end_data'] = {'component': stg_name, 'pin': 'short'}
 
-        # 3. Create Routes
-        for r_item in parsed_routes:
+        # 3. Create Routes in topological/dependency order so parent routes exist before branch routes attach to them
+        # Primary routes (connected to external components or junctions at both ends) are created first.
+        created_route_objs = {}  # full_name -> route object
+
+        def instantiate_route(r_item):
             full_name = r_item['full_name']
             coords = r_item['coords']
 
+            # Resolve start pin if it's still 'coord'
+            if r_item['start_type'] == 'coord':
+                start_pt = coords[0]
+                start_key = (round(start_pt[0], 6), round(start_pt[1], 6))
+                # Find a parent route containing this coord
+                parent_info = self._find_parent_route_for_coord(parsed_routes, start_key, exclude_name=r_item['name'])
+                if parent_info:
+                    parent_item, toward_pt = parent_info
+                    parent_obj = created_route_objs[parent_item['full_name']]
+                    pin_name = f"pin_{r_item['name']}_start"
+                    in_pts = self._make_pin_points(start_pt[0], start_pt[1], toward_pt[0], toward_pt[1])
+                    parent_obj.add_pin(pin_name, in_pts, self.trace_width, input_as_norm=True)
+                    r_item['start_type'] = 'added_pin'
+                    r_item['start_data'] = {'component': parent_item['full_name'], 'pin': pin_name}
+
+            # Resolve end pin if it's still 'coord'
+            if r_item['end_type'] == 'coord':
+                end_pt = coords[-1]
+                end_key = (round(end_pt[0], 6), round(end_pt[1], 6))
+                parent_info = self._find_parent_route_for_coord(parsed_routes, end_key, exclude_name=r_item['name'])
+                if parent_info:
+                    parent_item, toward_pt = parent_info
+                    parent_obj = created_route_objs[parent_item['full_name']]
+                    pin_name = f"pin_{r_item['name']}_end"
+                    in_pts = self._make_pin_points(end_pt[0], end_pt[1], toward_pt[0], toward_pt[1])
+                    parent_obj.add_pin(pin_name, in_pts, self.trace_width, input_as_norm=True)
+                    r_item['end_type'] = 'added_pin'
+                    r_item['end_data'] = {'component': parent_item['full_name'], 'pin': pin_name}
+
             if r_item['start_type'] == 'component':
                 start_pin = r_item['start_data']['spec']
-            elif r_item['start_type'] in ('junction', 'short_obj'):
+            elif r_item['start_type'] in ('junction', 'short_obj', 'added_pin'):
                 start_pin = r_item['start_data']
             else:
                 raise ValueError(
@@ -515,7 +546,7 @@ class TreeRoute:
 
             if r_item['end_type'] == 'component':
                 end_pin = r_item['end_data']['spec']
-            elif r_item['end_type'] in ('junction', 'short_obj'):
+            elif r_item['end_type'] in ('junction', 'short_obj', 'added_pin'):
                 end_pin = r_item['end_data']
             else:
                 raise ValueError(
@@ -524,7 +555,6 @@ class TreeRoute:
 
             intermediate_pts = coords[1:-1]
 
-            # RouteAnchors 的 anchor key 必須從 0 開始
             anchors = OrderedDict(
                 (i, np.asarray(pt, dtype=float))
                 for i, pt in enumerate(intermediate_pts)
@@ -563,6 +593,46 @@ class TreeRoute:
                 )
 
             self.routes[full_name] = route
+            created_route_objs[full_name] = route
+
+        # Determine creation order: routes with start/end as 'coord' that need parent routes should be built after their parents
+        primary_routes = [r for r in parsed_routes if r['start_type'] != 'coord' and r['end_type'] != 'coord']
+        secondary_routes = [r for r in parsed_routes if r['start_type'] == 'coord' or r['end_type'] == 'coord']
+
+        for r_item in primary_routes:
+            instantiate_route(r_item)
+
+        for r_item in secondary_routes:
+            instantiate_route(r_item)
+
+    def _find_parent_route_for_coord(self, parsed_routes, target_key, exclude_name=None):
+        """
+        Finds a parent route that contains target_key in its coords.
+        Returns tuple (parent_route_dict, toward_pt) or None.
+        toward_pt is the point on the branch route moving away from target_key or toward the next branch point.
+        """
+        for r_item in parsed_routes:
+            if r_item['name'] == exclude_name:
+                continue
+            coords = r_item['coords']
+            for k, pt in enumerate(coords):
+                pt_key = (round(pt[0], 6), round(pt[1], 6))
+                if pt_key == target_key:
+                    # Find branch's toward_pt from the branch route itself
+                    branch_item = next((r for r in parsed_routes if r['name'] == exclude_name), None)
+                    toward_pt = None
+                    if branch_item:
+                        b_coords = branch_item['coords']
+                        b_start_key = (round(b_coords[0][0], 6), round(b_coords[0][1], 6))
+                        b_end_key = (round(b_coords[-1][0], 6), round(b_coords[-1][1], 6))
+                        if b_start_key == target_key and len(b_coords) > 1:
+                            toward_pt = b_coords[1]
+                        elif b_end_key == target_key and len(b_coords) > 1:
+                            toward_pt = b_coords[-2]
+                    if toward_pt is None:
+                        toward_pt = coords[k+1] if k < len(coords) - 1 else coords[k-1]
+                    return r_item, toward_pt
+        return None
 
     def get_total_length(self):
         total = 0.0
