@@ -21,6 +21,247 @@ import config
 import components
 import utils
 
+def point(value):
+    return [round(float(value[0]), 6), round(float(value[1]), 6)]
+
+
+def path_coordinates(path):
+    return [
+        point(item)
+        for item in path
+        if isinstance(item, (list, tuple)) and len(item) == 2
+    ]
+
+
+def mirror_point(value):
+    val = point(value)
+    return [round(-val[0], 6), val[1]]
+
+
+def mirror_reverse_path(path, component=None, pin='tie'):
+    result = [mirror_point(item) for item in reversed(path_coordinates(path))]
+    if component is not None:
+        result.append({'component': component, 'pin': pin})
+    return result
+
+
+class PathBuilder:
+    """Intuitive path builder using relative directional moves."""
+
+    def __init__(self, start):
+        self.current = point(start)
+        self.path = [list(self.current)]
+
+    def move(self, dx=0.0, dy=0.0):
+        dx = float(dx)
+        dy = float(dy)
+        if abs(dx) > 1e-12 and abs(dy) > 1e-12:
+            raise ValueError('Only horizontal or vertical moves are allowed')
+        if abs(dx) <= 1e-12 and abs(dy) <= 1e-12:
+            return self
+        self.current = [
+            round(self.current[0] + dx, 6),
+            round(self.current[1] + dy, 6),
+        ]
+        self.path.append(list(self.current))
+        return self
+
+    def right(self, dist):
+        return self.move(dx=dist)
+
+    def left(self, dist):
+        return self.move(dx=-dist)
+
+    def up(self, dist):
+        return self.move(dy=dist)
+
+    def down(self, dist):
+        return self.move(dy=-dist)
+
+    def to_y(self, y):
+        return self.move(dy=round(float(y) - self.current[1], 6))
+
+
+def derive_geometry(a1, a2, a3, b, c, d, delta, n, launch_y):
+    half_row_width = n * 2.0 * b
+
+    j4_x = -d
+    j5_x = d
+    j2_x = j4_x - half_row_width
+    j6_x = -j2_x
+
+    left_tie_x = j2_x - 2.0 * b
+    right_tie_x = -left_tie_x
+
+    lower_baseline = launch_y + delta
+    middle_baseline = lower_baseline + a2 + c
+    upper_baseline = middle_baseline + a3 + c
+
+    # Blue-circle nodes: one b outside the normal middle-row endpoint.
+    left_shared_x = j2_x - b
+    right_shared_x = j6_x + b
+
+    return {
+        'left_tie': point([left_tie_x, launch_y]),
+        'left_outer': point([j2_x, middle_baseline]),
+        'left_shared': point([left_shared_x, middle_baseline]),
+        'left_inner': point([j4_x, lower_baseline]),
+        'center': point([0.0, upper_baseline]),
+        'right_inner': point([j5_x, lower_baseline]),
+        'right_outer': point([j6_x, middle_baseline]),
+        'right_shared': point([right_shared_x, middle_baseline]),
+        'right_tie': point([right_tie_x, launch_y]),
+        'lower_baseline': round(lower_baseline, 6),
+        'middle_baseline': round(middle_baseline, 6),
+        'upper_baseline': round(upper_baseline, 6),
+    }
+
+
+def generate_routes(left_tie, right_tie, geometry, a1, a2, a3, b, c, d, delta, n, length_p):
+    left_tie = point(left_tie)
+    right_tie = point(right_tie)
+
+    lp1, lp2, lp3, lp4, lp5, lp6, lp7 = length_p[:7]
+
+    # Lower row (t1): start at launch tie, move down-right with n U-cells to inner node.
+    p1 = PathBuilder(left_tie)
+    p1.path.insert(0, {'component': 'port_L4', 'pin': 'tie'})
+    p1.right(2.0 * b).down(a1 - delta).right(b).up(a1).right(b)
+    for _ in range(n - 1):
+        p1.down(a1).right(b).up(a1).right(b)
+    t1 = p1.path
+
+    # Middle row (t2): start at inner node, rise to middle baseline, move left with n U-cells to shared node.
+    p2 = PathBuilder(geometry['left_inner'])
+    p2.to_y(geometry['middle_baseline'])
+    for _ in range(n):
+        p2.left(b).down(a2).left(b).up(a2)
+    p2.left(b)
+    if p2.current != geometry['left_shared']:
+        raise ValueError(
+            f'Middle endpoint {p2.current} != shared node {geometry["left_shared"]}'
+        )
+    t2 = p2.path
+
+    # Upper row (t3): start at shared node, rise to upper baseline, move right with n U-cells to center.
+    p3 = PathBuilder(geometry['left_shared'])
+    p3.to_y(geometry['upper_baseline'])
+    for _ in range(n):
+        p3.right(b).down(a3).right(b).up(a3)
+    p3.right(b + d)
+    if p3.current != geometry['center']:
+        raise ValueError(
+            f'Upper endpoint {p3.current} != center {geometry["center"]}'
+        )
+    t3 = p3.path
+
+    # Mirror routes for the right half of the symmetric structure.
+    t4 = mirror_reverse_path(t3)
+    t5 = mirror_reverse_path(t2)
+    t6 = mirror_reverse_path(t1, component='port_R4', pin='tie')
+    t6[-2] = list(right_tie)
+
+    # Ground stubs attached to junction nodes.
+    stubs = {
+        'ground_lp1': {
+            'path': [left_tie, [left_tie[0], round(left_tie[1] + lp1, 6)]],
+            'end': 'short',
+        },
+        'ground_lp2': {
+            'path': [
+                geometry['left_shared'],
+                [geometry['left_shared'][0], round(geometry['left_shared'][1] - lp2, 6)],
+            ],
+            'end': 'short',
+        },
+        'ground_lp3': {
+            'path': [
+                geometry['left_inner'],
+                [geometry['left_inner'][0], round(geometry['left_inner'][1] - lp3, 6)],
+            ],
+            'end': 'short',
+        },
+        'ground_lp4': {
+            'path': [
+                geometry['center'],
+                [geometry['center'][0], round(geometry['center'][1] - lp4, 6)],
+            ],
+            'end': 'short',
+        },
+        'ground_lp5': {
+            'path': [
+                geometry['right_inner'],
+                [geometry['right_inner'][0], round(geometry['right_inner'][1] - lp5, 6)],
+            ],
+            'end': 'short',
+        },
+        'ground_lp6': {
+            'path': [
+                geometry['right_shared'],
+                [geometry['right_shared'][0], round(geometry['right_shared'][1] - lp6, 6)],
+            ],
+            'end': 'short',
+        },
+        'ground_lp7': {
+            'path': [right_tie, [right_tie[0], round(right_tie[1] + lp7, 6)]],
+            'end': 'short',
+        },
+    }
+
+    # Shared-junction consistency checks.
+    if path_coordinates(t2)[-1] != geometry['left_shared']:
+        raise ValueError('t2 does not end at left shared junction')
+    if path_coordinates(t3)[0] != geometry['left_shared']:
+        raise ValueError('t3 does not start at left shared junction')
+    if stubs['ground_lp2']['path'][0] != geometry['left_shared']:
+        raise ValueError('ground_lp2 does not start at left shared junction')
+
+    return (t1, t2, t3, t4, t5, t6), stubs
+
+
+def build_tree(design, config, a1, a2, a3, b, c, d, delta, length_p, n=2):
+    if 'port_L4' in design.components:
+        port_L4 = design.components['port_L4']
+    else:
+        raise ValueError("port_L4 component not found in design")
+    if 'port_R4' in design.components:
+        port_R4 = design.components['port_R4']
+    else:
+        raise ValueError("port_R4 component not found in design")
+
+    left_tie = point(port_L4.pins['tie']['middle'])
+    right_tie = point(port_R4.pins['tie']['middle'])
+    launch_y = left_tie[1]
+
+    geometry = derive_geometry(a1, a2, a3, b, c, d, delta, n, launch_y)
+    routes, stubs = generate_routes(left_tie, right_tie, geometry, a1, a2, a3, b, c, d, delta, n, length_p)
+    t1, t2, t3, t4, t5, t6 = routes
+
+    tree_config = [
+        {'name': 'j1_to_j4', 'path': t1},
+        {'name': 'j4_to_j2', 'path': t2},
+        {'name': 'j2_to_j3', 'path': t3},
+        {'name': 'j3_to_j6', 'path': t4},
+        {'name': 'j6_to_j5', 'path': t5},
+        {'name': 'j5_to_j7', 'path': t6},
+    ]
+    tree_config += [dict(name=name, **cfg) for name, cfg in stubs.items()]
+
+    fillet_val = config.cpw_width + config.cpw_gap + 0.006
+
+    tree = components.TreeRoute(
+        design=design,
+        name='tree',
+        tree_config=tree_config,
+        trace_width=config.cpw_width,
+        trace_gap=config.cpw_gap,
+        fillet=fillet_val,
+        lead_in='0mm',
+        lead_out='0mm',
+    )
+    return tree
+
+
 def build_ports(design, config):
     # 可控制要畫哪些 port
     # True 表示要畫，False 表示不畫

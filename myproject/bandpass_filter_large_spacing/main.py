@@ -27,6 +27,15 @@ def main():
     # ==========================================
     r = config.cpw_width/2 + config.cpw_gap + 0.006                     # 轉角圓弧半徑 Fillet R
     
+    # 幾何參數
+    a1 = 2.10
+    a2 = 2.00
+    a3 = 2.30
+    b = 0.45
+    c = 0.85
+    d = 0.20
+    delta = -0.1
+
     # 只需要在這裡輸入各段距離和對應的長度
     segments = [8652.57, 9563.69, 9691.28, 9691.28, 9563.69, 8652.57]
     length_p = [1133.57, 211.113, 104.681, 82.6346, 104.681, 211.113, 1133.57]
@@ -42,7 +51,7 @@ def main():
     if 'port_R4' in design.components: port_R4 = design.components['port_R4']
     S_target = abs(port_R4.pins['tie']['middle'][0] - port_L4.pins['tie']['middle'][0])  # 目標水平總跨距 S
     print("S_target: ", S_target)
-    layout_builder.build_tree(design, config, a1,a2,a3,b,c,d,delta,length_p)
+    layout_builder.build_tree(design, config, a1, a2, a3, b, c, d, delta, length_p)
     #layout_builder.build_transmission_lines(design, config)
     #layout_builder.build_qubits(design, config)
     #layout_builder.build_resonators(design, config)
