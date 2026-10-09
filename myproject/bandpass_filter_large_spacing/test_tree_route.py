@@ -315,13 +315,13 @@ def build_tree_config():
             'name': 'left_ground',
             'start': {'component': 'left_launch', 'pin': 'ground'},
             'end': 'short',
-            'path': [[J1[0], J1[1] + 1.13357]]
+            'path': [[J1[0], J1[1] - 1.13357]]
         },
         {
             'name': 'right_ground',
             'start': {'component': 'right_launch', 'pin': 'ground'},
             'end': 'short',
-            'path': [[J7[0], J7[1] + 1.13357]]
+            'path': [[J7[0], J7[1] - 1.13357]]
         }
     ]
 
