@@ -1,10 +1,10 @@
+import os
 import traceback
 from collections import OrderedDict
 
 import numpy as np
 from qiskit_metal import designs
 from qiskit_metal.qlibrary.terminations.launchpad_wb import LaunchpadWirebond
-from qiskit_metal.qlibrary.terminations.short_to_ground import ShortToGround
 
 try:
     from qiskit_metal import MetalGUI
@@ -15,25 +15,22 @@ from components import TreeRoute
 
 
 # ============================================================
-# Test 2 settings
+# Test settings
 # ============================================================
 
 TRACE_WIDTH = '10um'
 TRACE_GAP = '6um'
 FILLET = '0um'
-ENABLE_GUI = True
+ENABLE_GUI = os.environ.get('ENABLE_GUI', 'True').lower() == 'true'
 
-# Basic horizontal spacing shown as b in the sketch.
-B = 0.60
-
-# Seven red nodes:
-# J1 = left launchpad; J7 = right launchpad.
-# J2..J6 are VirtualJunction objects.
+# Nodes coordinates from the meander sketch
+J1 = np.array([-8.75, -4.05])
 J2 = np.array([-6.60, -0.10])
 J3 = np.array([ 0.00,  3.20])
 J4 = np.array([-0.90, -2.80])
-J5 = np.array([ 0.90, -2.80])  # J4-J5 spacing = 1.8 mm = 3b; no wire here.
+J5 = np.array([ 0.90, -2.80])
 J6 = np.array([ 6.60, -0.10])
+J7 = np.array([ 8.75, -4.05])
 
 Y_TOP = 3.20
 Y_UPPER_LOW = 0.90
@@ -54,9 +51,6 @@ EXPECTED_VIRTUAL_JUNCTIONS = 5
 
 class BranchLaunchpadWirebond(LaunchpadWirebond):
     """Launchpad endpoint with separate main and ground routing pins.
-
-    Both pins share the original tie location geometrically.  The main pin
-    follows the original tie normal.  The ground pin points downward.
     """
 
     def make(self):
@@ -86,79 +80,173 @@ class BranchLaunchpadWirebond(LaunchpadWirebond):
 
 
 # ============================================================
-# Utility functions
+# Path generators for routes
 # ============================================================
 
-def as_anchors(points):
-    return OrderedDict(
-        (index + 1, np.asarray(point, dtype=float))
-        for index, point in enumerate(points)
-    )
+def bottom_left_path():
+    """J1 -> J4: lower-left meander."""
+    return [
+        {'component': 'left_launch', 'pin': 'main'},
+        [J1[0] + 0.45, J1[1]],
+        [-7.80, J1[1]],
+        [-7.80, Y_BOTTOM_HIGH],
+        [-7.20, Y_BOTTOM_HIGH],
+        [-7.20, Y_BOTTOM_LOW],
+        [-6.60, Y_BOTTOM_LOW],
+        [-6.60, Y_BOTTOM_HIGH],
+        [-6.00, Y_BOTTOM_HIGH],
+        [-6.00, Y_BOTTOM_LOW],
+        [-5.40, Y_BOTTOM_LOW],
+        [-5.40, Y_BOTTOM_HIGH],
+        [-4.80, Y_BOTTOM_HIGH],
+        [-4.80, Y_BOTTOM_LOW],
+        [-4.20, Y_BOTTOM_LOW],
+        [-4.20, Y_BOTTOM_HIGH],
+        [-3.60, Y_BOTTOM_HIGH],
+        [-3.60, Y_BOTTOM_LOW],
+        [-3.00, Y_BOTTOM_LOW],
+        [-3.00, Y_BOTTOM_HIGH],
+        [-2.40, Y_BOTTOM_HIGH],
+        [-2.40, Y_BOTTOM_LOW],
+        [-1.80, Y_BOTTOM_LOW],
+        [-1.80, float(J4[1])],
+        [-1.20, float(J4[1])],
+        J4.tolist()
+    ]
 
 
-def leaf(name, component, pin='short', points=None):
-    return {
-        'name': name,
-        'anchors': as_anchors(points or []),
-        'end_pin': {'component': component, 'pin': pin}
-    }
+def middle_left_path():
+    """J4 -> J2: middle-left meander."""
+    return [
+        J4.tolist(),
+        [-1.30, float(J4[1])],
+        [-1.30, Y_MIDDLE_HIGH],
+        [-1.90, Y_MIDDLE_HIGH],
+        [-1.90, Y_MIDDLE_LOW],
+        [-2.50, Y_MIDDLE_LOW],
+        [-2.50, Y_MIDDLE_HIGH],
+        [-3.10, Y_MIDDLE_HIGH],
+        [-3.10, Y_MIDDLE_LOW],
+        [-3.70, Y_MIDDLE_LOW],
+        [-3.70, Y_MIDDLE_HIGH],
+        [-4.30, Y_MIDDLE_HIGH],
+        [-4.30, Y_MIDDLE_LOW],
+        [-4.90, Y_MIDDLE_LOW],
+        [-4.90, Y_MIDDLE_HIGH],
+        [-5.50, Y_MIDDLE_HIGH],
+        [-5.50, Y_MIDDLE_LOW],
+        [-6.10, Y_MIDDLE_LOW],
+        [-6.10, float(J2[1])],
+        J2.tolist()
+    ]
 
 
-def junction(name, coord, points, branches):
-    return {
-        'name': name,
-        'anchors': as_anchors(points),
-        'junction_coord': np.asarray(coord, dtype=float).tolist(),
-        'branches': branches
-    }
+def upper_left_path():
+    """J2 -> J3: upper-left meander."""
+    return [
+        J2.tolist(),
+        [-6.60, 0.55],
+        [-6.60, Y_TOP],
+        [-6.00, Y_TOP],
+        [-6.00, Y_UPPER_LOW],
+        [-5.40, Y_UPPER_LOW],
+        [-5.40, Y_TOP],
+        [-4.80, Y_TOP],
+        [-4.80, Y_UPPER_LOW],
+        [-4.20, Y_UPPER_LOW],
+        [-4.20, Y_TOP],
+        [-3.60, Y_TOP],
+        [-3.60, Y_UPPER_LOW],
+        [-3.00, Y_UPPER_LOW],
+        [-3.00, Y_TOP],
+        [-2.40, Y_TOP],
+        [-2.40, Y_UPPER_LOW],
+        [-1.80, Y_UPPER_LOW],
+        [-1.80, Y_TOP],
+        [-0.40, Y_TOP],
+        J3.tolist()
+    ]
 
 
-def pin_middle(design, component, pin):
-    return np.asarray(
-        design.components[component].pins[pin]['middle'],
-        dtype=float
-    )
+def upper_right_path():
+    """J3 -> J6: upper-right meander."""
+    return [
+        J3.tolist(),
+        [0.40, Y_TOP],
+        [1.80, Y_TOP],
+        [1.80, Y_UPPER_LOW],
+        [2.40, Y_UPPER_LOW],
+        [2.40, Y_TOP],
+        [3.00, Y_TOP],
+        [3.00, Y_UPPER_LOW],
+        [3.60, Y_UPPER_LOW],
+        [3.60, Y_TOP],
+        [4.20, Y_TOP],
+        [4.20, Y_UPPER_LOW],
+        [4.80, Y_UPPER_LOW],
+        [4.80, Y_TOP],
+        [5.40, Y_TOP],
+        [5.40, Y_UPPER_LOW],
+        [6.00, Y_UPPER_LOW],
+        [6.00, Y_TOP],
+        [6.60, Y_TOP],
+        [6.60, 0.55],
+        J6.tolist()
+    ]
 
 
-def pin_normal(design, component, pin):
-    value = np.asarray(
-        design.components[component].pins[pin]['normal'],
-        dtype=float
-    )
-    return value / np.linalg.norm(value)
+def middle_right_path():
+    """J6 -> J5: middle-right meander."""
+    return [
+        J6.tolist(),
+        [6.10, float(J6[1])],
+        [6.10, Y_MIDDLE_LOW],
+        [5.50, Y_MIDDLE_LOW],
+        [5.50, Y_MIDDLE_HIGH],
+        [4.90, Y_MIDDLE_HIGH],
+        [4.90, Y_MIDDLE_LOW],
+        [4.30, Y_MIDDLE_LOW],
+        [4.30, Y_MIDDLE_HIGH],
+        [3.70, Y_MIDDLE_HIGH],
+        [3.70, Y_MIDDLE_LOW],
+        [3.10, Y_MIDDLE_LOW],
+        [3.10, Y_MIDDLE_HIGH],
+        [2.50, Y_MIDDLE_HIGH],
+        [2.50, Y_MIDDLE_LOW],
+        [1.90, Y_MIDDLE_LOW],
+        [1.90, float(J5[1])],
+        [1.30, float(J5[1])],
+        J5.tolist()
+    ]
 
 
-def print_pin(design, component, pin):
-    print(
-        f'{component}.{pin}: '
-        f'middle={pin_middle(design, component, pin).tolist()}, '
-        f'normal={pin_normal(design, component, pin).tolist()}'
-    )
-
-
-def assert_opposite_normals(design, comp_a, pin_a, comp_b, pin_b):
-    a = pin_normal(design, comp_a, pin_a)
-    b = pin_normal(design, comp_b, pin_b)
-    dot = float(np.dot(a, b))
-    print(f'{comp_a}.{pin_a} vs {comp_b}.{pin_b}: dot={dot:.6f}')
-    assert dot < -0.99, (
-        f'Pins do not face each other: {comp_a}.{pin_a}={a.tolist()}, '
-        f'{comp_b}.{pin_b}={b.tolist()}'
-    )
-
-
-def assert_manhattan(points, name):
-    for index, (first, second) in enumerate(zip(points, points[1:])):
-        p1 = np.asarray(first, dtype=float)
-        p2 = np.asarray(second, dtype=float)
-        same_x = np.isclose(p1[0], p2[0])
-        same_y = np.isclose(p1[1], p2[1])
-        if same_x and same_y:
-            raise ValueError(f'{name}: duplicate anchors at {index}/{index + 1}: {p1.tolist()}')
-        if not same_x and not same_y:
-            raise ValueError(
-                f'{name}: diagonal anchors {p1.tolist()} -> {p2.tolist()}'
-            )
+def bottom_right_path():
+    """J5 -> J7: lower-right meander."""
+    return [
+        J5.tolist(),
+        [1.20, float(J5[1])],
+        [1.80, float(J5[1])],
+        [1.80, Y_BOTTOM_LOW],
+        [2.40, Y_BOTTOM_LOW],
+        [2.40, Y_BOTTOM_HIGH],
+        [3.00, Y_BOTTOM_HIGH],
+        [3.00, Y_BOTTOM_LOW],
+        [3.60, Y_BOTTOM_LOW],
+        [3.60, Y_BOTTOM_HIGH],
+        [4.20, Y_BOTTOM_HIGH],
+        [4.20, Y_BOTTOM_LOW],
+        [4.80, Y_BOTTOM_LOW],
+        [4.80, Y_BOTTOM_HIGH],
+        [5.40, Y_BOTTOM_HIGH],
+        [5.40, Y_BOTTOM_LOW],
+        [6.00, Y_BOTTOM_LOW],
+        [6.00, Y_BOTTOM_HIGH],
+        [6.60, Y_BOTTOM_HIGH],
+        [6.60, Y_BOTTOM_LOW],
+        [7.20, J7[1]],
+        [J7[0] - 0.45, J7[1]],
+        {'component': 'right_launch', 'pin': 'main'}
+    ]
 
 
 # ============================================================
@@ -203,298 +291,64 @@ def create_launchpads(design):
     return left, right
 
 
-def create_shorts(design):
-    j1 = pin_middle(design, 'left_launch', 'ground')
-    j7 = pin_middle(design, 'right_launch', 'ground')
-
-    # All shorts are below their corresponding red nodes.
-    specs = [
-        ('short_1', float(j1[0]), float(j1[1] - 0.75)),
-        ('short_2', float(J2[0]), float(J2[1] - 0.75)),
-        ('short_3', float(J3[0]), float(J3[1] - 0.75)),
-        ('short_4', float(J4[0]), float(J4[1] - 0.75)),
-        ('short_5', float(J5[0]), float(J5[1] - 0.75)),
-        ('short_6', float(J6[0]), float(J6[1] - 0.75)),
-        ('short_7', float(j7[0]), float(j7[1] - 0.75)),
-    ]
-
-    result = {}
-    for name, x, y in specs:
-        result[name] = ShortToGround(
-            design,
-            name,
-            options=dict(
-                pos_x=f'{x}mm',
-                pos_y=f'{y}mm',
-                orientation='270',
-                width=TRACE_WIDTH
-            )
-        )
-    return result
-
-
 # ============================================================
-# Six black meander routes from the sketch
-# Tree direction: J1 -> J4 -> J2 -> J3 -> J6 -> J5 -> J7
-# This direction is only for recursion. Geometry matches the sketch.
+# Configuration using intuition path-based syntax
 # ============================================================
 
-def bottom_left_points(j1):
-    """J1 -> J4: lower-left meander."""
-    points = [
-        [j1[0] + 0.45, j1[1]],
-        [-7.80, j1[1]],
-        [-7.80, Y_BOTTOM_HIGH],
-        [-7.20, Y_BOTTOM_HIGH],
-        [-7.20, Y_BOTTOM_LOW],
-        [-6.60, Y_BOTTOM_LOW],
-        [-6.60, Y_BOTTOM_HIGH],
-        [-6.00, Y_BOTTOM_HIGH],
-        [-6.00, Y_BOTTOM_LOW],
-        [-5.40, Y_BOTTOM_LOW],
-        [-5.40, Y_BOTTOM_HIGH],
-        [-4.80, Y_BOTTOM_HIGH],
-        [-4.80, Y_BOTTOM_LOW],
-        [-4.20, Y_BOTTOM_LOW],
-        [-4.20, Y_BOTTOM_HIGH],
-        [-3.60, Y_BOTTOM_HIGH],
-        [-3.60, Y_BOTTOM_LOW],
-        [-3.00, Y_BOTTOM_LOW],
-        [-3.00, Y_BOTTOM_HIGH],
-        [-2.40, Y_BOTTOM_HIGH],
-        [-2.40, Y_BOTTOM_LOW],
-        [-1.80, Y_BOTTOM_LOW],
-        [-1.80, float(J4[1])],
-        [-1.20, float(J4[1])],
+def build_tree_config():
+    return [
+        # Main 6 routes
+        {'name': 'j1_to_j4', 'path': bottom_left_path()},
+        {'name': 'j4_to_j2', 'path': middle_left_path()},
+        {'name': 'j2_to_j3', 'path': upper_left_path()},
+        {'name': 'j3_to_j6', 'path': upper_right_path()},
+        {'name': 'j6_to_j5', 'path': middle_right_path()},
+        {'name': 'j5_to_j7', 'path': bottom_right_path()},
+
+        # 5 Ground routes connecting junctions J2..J6 to auto-created ShortToGround
+        {'name': 'ground_2', 'path': [J2.tolist(), [J2[0], J2[1] - 0.75]], 'end': 'short'},
+        {'name': 'ground_3', 'path': [J3.tolist(), [J3[0], J3[1] - 0.75]], 'end': 'short'},
+        {'name': 'ground_4', 'path': [J4.tolist(), [J4[0], J4[1] - 0.75]], 'end': 'short'},
+        {'name': 'ground_5', 'path': [J5.tolist(), [J5[0], J5[1] - 0.75]], 'end': 'short'},
+        {'name': 'ground_6', 'path': [J6.tolist(), [J6[0], J6[1] - 0.75]], 'end': 'short'},
+
+        # 2 Launchpad ground routes to auto-created ShortToGround
+        {
+            'name': 'left_ground',
+            'start': {'component': 'left_launch', 'pin': 'ground'},
+            'end': 'short',
+            'path': [[J1[0], J1[1] - 0.75]]
+        },
+        {
+            'name': 'right_ground',
+            'start': {'component': 'right_launch', 'pin': 'ground'},
+            'end': 'short',
+            'path': [[J7[0], J7[1] - 0.75]]
+        }
     ]
-    assert_manhattan(points, 'J1_to_J4')
-    return points
-
-
-def middle_left_points():
-    """J4 -> J2: middle-left meander, traversed right-to-left."""
-    points = [
-        [-1.30, float(J4[1])],
-        [-1.30, Y_MIDDLE_HIGH],
-        [-1.90, Y_MIDDLE_HIGH],
-        [-1.90, Y_MIDDLE_LOW],
-        [-2.50, Y_MIDDLE_LOW],
-        [-2.50, Y_MIDDLE_HIGH],
-        [-3.10, Y_MIDDLE_HIGH],
-        [-3.10, Y_MIDDLE_LOW],
-        [-3.70, Y_MIDDLE_LOW],
-        [-3.70, Y_MIDDLE_HIGH],
-        [-4.30, Y_MIDDLE_HIGH],
-        [-4.30, Y_MIDDLE_LOW],
-        [-4.90, Y_MIDDLE_LOW],
-        [-4.90, Y_MIDDLE_HIGH],
-        [-5.50, Y_MIDDLE_HIGH],
-        [-5.50, Y_MIDDLE_LOW],
-        [-6.10, Y_MIDDLE_LOW],
-        [-6.10, float(J2[1])],
-    ]
-    assert_manhattan(points, 'J4_to_J2')
-    return points
-
-
-def upper_left_points():
-    """J2 -> J3: upper-left meander."""
-    points = [
-        [-6.60, 0.55],
-        [-6.60, Y_TOP],
-        [-6.00, Y_TOP],
-        [-6.00, Y_UPPER_LOW],
-        [-5.40, Y_UPPER_LOW],
-        [-5.40, Y_TOP],
-        [-4.80, Y_TOP],
-        [-4.80, Y_UPPER_LOW],
-        [-4.20, Y_UPPER_LOW],
-        [-4.20, Y_TOP],
-        [-3.60, Y_TOP],
-        [-3.60, Y_UPPER_LOW],
-        [-3.00, Y_UPPER_LOW],
-        [-3.00, Y_TOP],
-        [-2.40, Y_TOP],
-        [-2.40, Y_UPPER_LOW],
-        [-1.80, Y_UPPER_LOW],
-        [-1.80, Y_TOP],
-        [-0.40, Y_TOP],
-    ]
-    assert_manhattan(points, 'J2_to_J3')
-    return points
-
-
-def upper_right_points():
-    """J3 -> J6: upper-right meander."""
-    points = [
-        [0.40, Y_TOP],
-        [1.80, Y_TOP],
-        [1.80, Y_UPPER_LOW],
-        [2.40, Y_UPPER_LOW],
-        [2.40, Y_TOP],
-        [3.00, Y_TOP],
-        [3.00, Y_UPPER_LOW],
-        [3.60, Y_UPPER_LOW],
-        [3.60, Y_TOP],
-        [4.20, Y_TOP],
-        [4.20, Y_UPPER_LOW],
-        [4.80, Y_UPPER_LOW],
-        [4.80, Y_TOP],
-        [5.40, Y_TOP],
-        [5.40, Y_UPPER_LOW],
-        [6.00, Y_UPPER_LOW],
-        [6.00, Y_TOP],
-        [6.60, Y_TOP],
-        [6.60, 0.55],
-    ]
-    assert_manhattan(points, 'J3_to_J6')
-    return points
-
-
-def middle_right_points():
-    """J6 -> J5: middle-right meander, traversed right-to-left."""
-    points = [
-        [6.10, float(J6[1])],
-        [6.10, Y_MIDDLE_LOW],
-        [5.50, Y_MIDDLE_LOW],
-        [5.50, Y_MIDDLE_HIGH],
-        [4.90, Y_MIDDLE_HIGH],
-        [4.90, Y_MIDDLE_LOW],
-        [4.30, Y_MIDDLE_LOW],
-        [4.30, Y_MIDDLE_HIGH],
-        [3.70, Y_MIDDLE_HIGH],
-        [3.70, Y_MIDDLE_LOW],
-        [3.10, Y_MIDDLE_LOW],
-        [3.10, Y_MIDDLE_HIGH],
-        [2.50, Y_MIDDLE_HIGH],
-        [2.50, Y_MIDDLE_LOW],
-        [1.90, Y_MIDDLE_LOW],
-        [1.90, float(J5[1])],
-        [1.30, float(J5[1])],
-    ]
-    assert_manhattan(points, 'J6_to_J5')
-    return points
-
-
-def bottom_right_points(j7):
-    """J5 -> J7: lower-right meander."""
-    points = [
-        [1.20, float(J5[1])],
-        [1.80, float(J5[1])],
-        [1.80, Y_BOTTOM_LOW],
-        [2.40, Y_BOTTOM_LOW],
-        [2.40, Y_BOTTOM_HIGH],
-        [3.00, Y_BOTTOM_HIGH],
-        [3.00, Y_BOTTOM_LOW],
-        [3.60, Y_BOTTOM_LOW],
-        [3.60, Y_BOTTOM_HIGH],
-        [4.20, Y_BOTTOM_HIGH],
-        [4.20, Y_BOTTOM_LOW],
-        [4.80, Y_BOTTOM_LOW],
-        [4.80, Y_BOTTOM_HIGH],
-        [5.40, Y_BOTTOM_HIGH],
-        [5.40, Y_BOTTOM_LOW],
-        [6.00, Y_BOTTOM_LOW],
-        [6.00, Y_BOTTOM_HIGH],
-        [6.60, Y_BOTTOM_HIGH],
-        [6.60, Y_BOTTOM_LOW],
-        # j7[1] currently equals Y_BOTTOM_LOW.  Do not insert both
-        # [7.20, Y_BOTTOM_LOW] and [7.20, j7[1]], because they become
-        # the same anchor and RouteAnchors rejects duplicate points.
-        [7.20, j7[1]],
-        [j7[0] - 0.45, j7[1]],
-    ]
-    assert_manhattan(points, 'J5_to_J7')
-    return points
-
-
-# ============================================================
-# Tree configuration
-# ============================================================
-
-def build_main_tree_config(design):
-    j1 = pin_middle(design, 'left_launch', 'main')
-    j7 = pin_middle(design, 'right_launch', 'main')
-
-    j5_to_j7 = leaf(
-        'j5_to_j7',
-        'right_launch',
-        'main',
-        bottom_right_points(j7)
-    )
-
-    j6_to_j5 = junction(
-        'j6_to_j5',
-        J5,
-        middle_right_points(),
-        [leaf('ground_5', 'short_5'), j5_to_j7]
-    )
-
-    j3_to_j6 = junction(
-        'j3_to_j6',
-        J6,
-        upper_right_points(),
-        [leaf('ground_6', 'short_6'), j6_to_j5]
-    )
-
-    j2_to_j3 = junction(
-        'j2_to_j3',
-        J3,
-        upper_left_points(),
-        [leaf('ground_3', 'short_3'), j3_to_j6]
-    )
-
-    j4_to_j2 = junction(
-        'j4_to_j2',
-        J2,
-        middle_left_points(),
-        [leaf('ground_2', 'short_2'), j2_to_j3]
-    )
-
-    return {
-        'name': 'j1_to_j4',
-        'start_pin': {'component': 'left_launch', 'pin': 'main'},
-        'anchors': as_anchors(bottom_left_points(j1)),
-        'junction_coord': J4.tolist(),
-        'branches': [leaf('ground_4', 'short_4'), j4_to_j2]
-    }
-
-
-def endpoint_ground_config(launchpad, short_name):
-    return {
-        'name': 'ground',
-        'start_pin': {'component': launchpad, 'pin': 'ground'},
-        'anchors': OrderedDict(),
-        'end_pin': {'component': short_name, 'pin': 'short'}
-    }
 
 
 # ============================================================
 # Diagnostics
 # ============================================================
 
-def collect_and_validate(main_tree, left_ground_tree, right_ground_tree):
-    all_routes = {}
-    for manager in (main_tree, left_ground_tree, right_ground_tree):
-        for name, route in manager.routes.items():
-            if name in all_routes:
-                raise AssertionError(f'Duplicate route name: {name}')
-            all_routes[name] = route
+def collect_and_validate(tree):
+    all_routes = tree.routes
 
     expected = {
-        'test2_main_j1_to_j4',
-        'test2_main_j4_to_j2',
-        'test2_main_j2_to_j3',
-        'test2_main_j3_to_j6',
-        'test2_main_j6_to_j5',
-        'test2_main_j5_to_j7',
-        'test2_main_ground_2',
-        'test2_main_ground_3',
-        'test2_main_ground_4',
-        'test2_main_ground_5',
-        'test2_main_ground_6',
-        'test2_left_ground_ground',
-        'test2_right_ground_ground',
+        'test2_j1_to_j4',
+        'test2_j4_to_j2',
+        'test2_j2_to_j3',
+        'test2_j3_to_j6',
+        'test2_j6_to_j5',
+        'test2_j5_to_j7',
+        'test2_ground_2',
+        'test2_ground_3',
+        'test2_ground_4',
+        'test2_ground_5',
+        'test2_ground_6',
+        'test2_left_ground',
+        'test2_right_ground',
     }
 
     missing = expected - set(all_routes)
@@ -505,10 +359,9 @@ def collect_and_validate(main_tree, left_ground_tree, right_ground_tree):
     print('\n' + '=' * 80)
     print('Test 2 result')
     print('=' * 80)
-    print(f'Main routes:       6')
-    print(f'Ground routes:     7')
     print(f'Total routes:      {len(all_routes)} / expected 13')
-    print(f'Virtual junctions: {len(main_tree.junctions)} / expected 5')
+    print(f'Virtual junctions: {len(tree.junctions)} / expected 5')
+    print(f'Shorts created:    {len(tree.shorts)} / expected 7')
     print('-' * 80)
 
     for name in sorted(all_routes):
@@ -527,10 +380,8 @@ def collect_and_validate(main_tree, left_ground_tree, right_ground_tree):
             print(f'[FAIL] {name}: {exc}')
 
     assert len(all_routes) == EXPECTED_TOTAL_ROUTES
-    assert len(main_tree.routes) == 11
-    assert len(left_ground_tree.routes) == 1
-    assert len(right_ground_tree.routes) == 1
-    assert len(main_tree.junctions) == EXPECTED_VIRTUAL_JUNCTIONS
+    assert len(tree.junctions) == EXPECTED_VIRTUAL_JUNCTIONS
+    assert len(tree.shorts) == EXPECTED_GROUND_ROUTES
     assert not missing, f'Missing routes: {sorted(missing)}'
     assert not extra, f'Extra routes: {sorted(extra)}'
     assert not failures, f'Route length errors: {failures}'
@@ -551,80 +402,27 @@ def run_test_2():
     design.chips.main.size.size_y = '12mm'
 
     left, right = create_launchpads(design)
-    create_shorts(design)
 
-    for component in (left, right):
-        missing = {'tie', 'main', 'ground'} - set(component.pins)
-        assert not missing, f'{component.name} missing pins: {sorted(missing)}'
-
-    print('\n' + '=' * 80)
-    print('Endpoint diagnostics')
-    print('=' * 80)
-    for component, pin in [
-        ('left_launch', 'ground'),
-        ('short_1', 'short'),
-        ('right_launch', 'ground'),
-        ('short_7', 'short'),
-    ]:
-        print_pin(design, component, pin)
-
-    assert_opposite_normals(
-        design, 'left_launch', 'ground', 'short_1', 'short'
-    )
-    assert_opposite_normals(
-        design, 'right_launch', 'ground', 'short_7', 'short'
-    )
-
-    main_config = build_main_tree_config(design)
-    left_ground_config = endpoint_ground_config('left_launch', 'short_1')
-    right_ground_config = endpoint_ground_config('right_launch', 'short_7')
+    tree_config = build_tree_config()
 
     try:
-        main_tree = TreeRoute(
+        tree = TreeRoute(
             design=design,
-            name='test2_main',
-            tree_config=main_config,
+            name='test2',
+            tree_config=tree_config,
             trace_width=TRACE_WIDTH,
             trace_gap=TRACE_GAP,
             fillet=FILLET,
             lead_in='0mm',
             lead_out='0mm'
         )
-
-        left_ground_tree = TreeRoute(
-            design=design,
-            name='test2_left_ground',
-            tree_config=left_ground_config,
-            trace_width=TRACE_WIDTH,
-            trace_gap=TRACE_GAP,
-            fillet=FILLET,
-            lead_in='0mm',
-            lead_out='0mm'
-        )
-
-        right_ground_tree = TreeRoute(
-            design=design,
-            name='test2_right_ground',
-            tree_config=right_ground_config,
-            trace_width=TRACE_WIDTH,
-            trace_gap=TRACE_GAP,
-            fillet=FILLET,
-            lead_in='0mm',
-            lead_out='0mm'
-        )
-
     except Exception:
-        print('\nTreeRoute construction failed. GUI has not been created yet.')
+        print('\nTreeRoute construction failed.')
         traceback.print_exc()
         raise
 
-    routes = collect_and_validate(
-        main_tree,
-        left_ground_tree,
-        right_ground_tree
-    )
+    routes = collect_and_validate(tree)
 
-    # Create Qt only after every route has passed validation.
     if ENABLE_GUI and MetalGUI is not None:
         try:
             gui = MetalGUI(design)
@@ -637,9 +435,8 @@ def run_test_2():
             print('GUI failed after routing validation.')
             traceback.print_exc()
 
-    return design, main_tree, left_ground_tree, right_ground_tree, routes
+    return design, tree, routes
 
 
 if __name__ == '__main__':
     run_test_2()
-

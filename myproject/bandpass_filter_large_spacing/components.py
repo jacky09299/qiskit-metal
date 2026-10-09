@@ -1,297 +1,16 @@
+import math
+from collections import OrderedDict
 import numpy as np
+
 from qiskit_metal.qlibrary.core import QComponent
 from qiskit_metal.qlibrary.sample_shapes.rectangle import Rectangle
-from qiskit_metal.qlibrary.tlines.straight_path import RouteStraight
 from qiskit_metal.qlibrary.tlines.anchored_path import RouteAnchors
+from qiskit_metal.qlibrary.tlines.straight_path import RouteStraight
 from qiskit_metal.qlibrary.terminations.short_to_ground import ShortToGround
+
 import config
 import utils
-'''
-class LShapedCPW:
-    """
-    通用的 L 型 CPW 走线类，支持以下六种类型：
-      - initial_L: 向下 vertical，再向右剩余 horizontal
-      - right_L: 向右 small (0.05)，再向下剩余 (total_length - small)
-      - left_L: 向左 small (0.05)，再向下剩余
-      - bottom_L: 向下 small (0.2)，再向右剩余
-      - top: 向下 entire total_length（直线）
-      - end_L: 向下 0.6，再向左剩余
-    """
-    TYPES = ("initial_L", "right_L", "left_L", "bottom_L", "top", "end_L")
 
-    def __init__(self, design, name,
-                 start_x, start_y,
-                 total_length,
-                 trace_width=config.cpw_width, trace_gap=config.cpw_gap, fillet=None,
-                 trace_type=None,
-                 folded_path=None, s=None, downlimit=1.1,a=0.1,b=0.1,c=0.1):
-        self.design = design
-        self.name = name
-        if 'port_L4' in design.components: port_L4 = design.components['port_L4']
-        if 'port_R4' in design.components: port_R4 = design.components['port_R4']
-        (self.start_x, self.start_y), self.tag = utils.get_xy_on_folded_path(folded_path, s, config.cpw_width/2 + config.cpw_gap + 0.006, port_L4.pins['tie']['middle'][0], port_L4.pins['tie']['middle'][1], port_R4.pins['tie']['middle'][0], port_R4.pins['tie']['middle'][1],a,c)
-        self.total = total_length
-        self.start_component = self.design.components['folded_TL'].name
-        self.trace_width = trace_width
-        self.trace_gap = trace_gap
-        self.fillet = config.cpw_width/2 + config.cpw_gap + 0.006
-        self.start_pin = "bottom"  # 默认起始 pin
-        self.folded_path = folded_path
-        self.s = s
-        self.downlimit = downlimit
-        self.b = b
-
-        # 决定类型
-        self.trace_type = trace_type or self._determine_type()
-        if self.trace_type not in self.TYPES:
-            raise ValueError(f"未知类型 {self.trace_type}")
-
-        # 调用对应的 builder
-        getattr(self, f"_build_{self.trace_type}")()
-
-    def _determine_type(self):
-            print(f"Determining type based on tag: {self.tag}")
-            if self.tag == 0:
-                return "right_L"
-            elif self.tag == 1:
-                return "top"
-            elif self.tag == 2:
-                return "left_L"
-            elif self.tag == 3:
-                return "bottom_L"
-            elif self.tag == 4:
-                return "right_L"
-            elif self.tag == -1:
-                return "initial_L"
-            elif self.tag == 5:
-                return "end_L"
-
-    def _build_initial_L(self):
-        # 向下 self.vertical，再向右剩余
-        down = self.downlimit
-        #down = 1.6
-        sx, sy = self.start_x, self.start_y
-        if down > self.total:
-            sx, sy = self.start_x, self.start_y
-            short_x = sx
-            short_y = sy - self.total
-            self._add_short(short_x, short_y, orientation="270")
-            self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
-            self.start_pin = f"{self.name}_start"
-            RouteStraight(self.design, self.name, options=dict(
-                pin_inputs=dict(
-                    start_pin=dict(component="folded_TL", pin=f"{self.name}_start"),
-                    end_pin=dict(component=self.short_name, pin="short")
-                ),
-                trace_width=config.cpw_width, trace_gap=config.cpw_gap
-            ))
-            return
-
-        short_x = sx + (self.total - down) + (2 - np.pi/2) * self.fillet
-        short_y = sy - down
-        self._add_short(short_x, short_y, orientation="0")
-        self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
-        self.start_pin = f"{self.name}_start"
-        anchors = {
-            "0": (sx, short_y)
-        }
-        self._add_route(anchors)
-
-
-    def _build_right_L(self):
-        # 先向右 small，再向下 total-small
-        small = 1.5*self.b
-        #small = 0.14
-        sx, sy = self.start_x, self.start_y
-        if small > self.total:
-            sx, sy = self.start_x, self.start_y
-            short_x = sx + self.total
-            short_y = sy
-            self._add_short(short_x, short_y, orientation="0")
-            self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx+0.0000001,sy]],width = config.cpw_width, input_as_norm=True)
-            self.start_pin = f"{self.name}_start"
-            RouteStraight(self.design, self.name, options=dict(
-                pin_inputs=dict(
-                    start_pin=dict(component="folded_TL", pin=f"{self.name}_start"),
-                    end_pin=dict(component=self.short_name, pin="short")
-                ),
-                trace_width=config.cpw_width, trace_gap=config.cpw_gap
-            ))
-            return
-        mid_x = sx + small
-        mid_y = sy
-        short_x = mid_x
-        short_y = sy - (self.total - small + (2 - np.pi/2) * self.fillet)
-
-        self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx+0.0000001,sy]],width = config.cpw_width, input_as_norm=True)
-        self.start_pin = f"{self.name}_start"
-
-        # 判斷是否需要再折一次
-        port4y = self.design.components['port_R4'].options.pos_y
-        ######################################################################################
-        if short_y < port4y - self.downlimit:
-            fold_x = mid_x
-            fold_y = port4y - self.downlimit
-            short_x = fold_x + (self.total - (mid_x - sx +  mid_y-fold_y) + (2 - np.pi/2) * self.fillet*2)
-            short_y = fold_y
-
-            # 最後 short
-            self._add_short(short_x, short_y, orientation="0")
-            anchors = {
-                "0": (mid_x, mid_y),
-                "1": (fold_x, fold_y)
-            }
-            self._add_route(anchors)
-
-
-        else:
-            # 原本的兩段
-            self._add_short(short_x, short_y, orientation="270")
-
-            anchors = {
-                "0": (mid_x, mid_y),
-            }
-            self._add_route(anchors)
-
-    def _build_left_L(self):
-        # 向左 0.05，再向下剩余
-        small = 1.5*self.b
-        sx, sy = self.start_x, self.start_y
-        if small > self.total:
-            sx, sy = self.start_x, self.start_y
-            short_x = sx - self.total
-            short_y = sy
-            self._add_short(short_x, short_y, orientation="180")
-            self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx-0.0000001,sy]],width = config.cpw_width, input_as_norm=True)
-            self.start_pin = f"{self.name}_start"
-            RouteStraight(self.design, self.name, options=dict(
-                pin_inputs=dict(
-                    start_pin=dict(component="folded_TL", pin=f"{self.name}_start"),
-                    end_pin=dict(component=self.short_name, pin="short")
-                ),
-                trace_width=config.cpw_width, trace_gap=config.cpw_gap
-            ))
-            return
-        mid_x = sx - small
-        mid_y = sy
-        short_x = mid_x
-        short_y = sy - (self.total - small + (2 - np.pi/2) * self.fillet)
-        self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx-0.0000001,sy]],width = config.cpw_width, input_as_norm=True)
-        self.start_pin = f"{self.name}_start"
-
-        port4y = self.design.components['port_R4'].options.pos_y
-        if short_y < port4y - self.downlimit:
-            fold_x = mid_x
-            fold_y = port4y - self.downlimit
-            short_x = fold_x + (self.total - (sx - mid_x +  mid_y-fold_y) + (2 - np.pi/2) * self.fillet*2)
-            short_y = fold_y
-
-            # 最後 short
-            self._add_short(short_x, short_y, orientation="0")
-            anchors = {
-                "0": (mid_x, mid_y),
-                "1": (fold_x, fold_y)
-            }
-            self._add_route(anchors)
-
-        else:
-            self._add_short(short_x, short_y, orientation="270")
-            anchors = {
-                    "0": (mid_x, mid_y)
-                }
-            self._add_route(anchors)
-
-
-    def _build_bottom_L(self):
-        # 向下 0.2，再向右剩余
-        down = 0.2
-        sx, sy = self.start_x, self.start_y
-        mid_x = sx
-        mid_y = sy - down
-        short_x = sx + (self.total - down + (2 - np.pi/2) * self.fillet)
-        short_y = sy - down
-        self._add_short(short_x, short_y, orientation="0")
-        self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
-        self.start_pin = f"{self.name}_start"
-        anchors = {
-                "0": (mid_x, mid_y)
-            }
-        self._add_route(anchors)
-
-    def _build_top(self):
-        # 向下 entire total_length（直线）
-        sx, sy = self.start_x, self.start_y
-        short_x = sx
-        short_y = sy - self.total
-        self._add_short(short_x, short_y, orientation="270")
-        self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
-        self.start_pin = f"{self.name}_start"
-        RouteStraight(self.design, self.name, options=dict(
-            pin_inputs=dict(
-                start_pin=dict(component="folded_TL", pin=f"{self.name}_start"),
-                end_pin=dict(component=self.short_name, pin="short")
-            ),
-            trace_width=config.cpw_width, trace_gap=config.cpw_gap
-        ))
-
-    def _build_end_L(self):
-        down = self.downlimit
-        #down = 1.6
-        sx, sy = self.start_x, self.start_y
-        if down > self.total:
-            sx, sy = self.start_x, self.start_y
-            short_x = sx
-            short_y = sy - self.total
-            self._add_short(short_x, short_y, orientation="270")
-            self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
-            self.start_pin = f"{self.name}_start"
-            RouteStraight(self.design, self.name, options=dict(
-                pin_inputs=dict(
-                    start_pin=dict(component="folded_TL", pin=f"{self.name}_start"),
-                    end_pin=dict(component=self.short_name, pin="short")
-                ),
-                trace_width=config.cpw_width, trace_gap=config.cpw_gap
-            ))
-            return
-        mid_x = sx
-        mid_y = sy - down
-        short_x = mid_x - (self.total - down + (2 - np.pi/2) * self.fillet)
-        short_y = mid_y
-        self._add_short(short_x, short_y, orientation="180")
-        self.design.components['folded_TL'].add_pin(f"{self.name}_start", points = [[sx,sy],[sx,sy-0.0000001]],width = config.cpw_width, input_as_norm=True)
-        self.start_component = 'folded_TL'
-        self.start_pin = f"{self.name}_start"
-        anchors = {
-            "0": (mid_x, mid_y)
-        }
-        self._add_route(anchors, leading=0.200)
-
-
-    def _add_short(self, x, y, orientation):
-        stg_name = f"{self.name}_stg"
-        ShortToGround(self.design, stg_name,
-                      options=dict(
-                          pos_x=x,
-                          pos_y=y,
-                          orientation=orientation
-                      ))
-        self.short_name = stg_name
-
-    def _add_route(self, anchors, leading=0.050):
-        RouteAnchors(self.design, self.name,
-            options=dict(
-                pin_inputs=dict(
-                    start_pin=dict(component=self.start_component, pin=self.start_pin),
-                    end_pin=dict(component=self.short_name, pin="short")
-                ),
-                trace_width=self.trace_width,
-                trace_gap=self.trace_gap,
-                fillet=self.fillet,
-                anchors=anchors,
-                lead = dict(start_straight=leading)
-            )
-        )
-'''
 
 class UShapeComponent:
     """
@@ -471,65 +190,18 @@ class UShapeComponent:
         self.rect_right = None
 
 
-# === 使用範例 ===
-def example_usage():
-    """
-    使用範例
-    """
-    # 創建 U 形元件
-    u_shape = UShapeComponent(design, 'my_u_shape')
-
-    # 在指定位置創建
-    cx, cy = 0, 0  # 輸入你的座標
-    u_shape.create(cx, cy)
-
-    # 重建和顯示
-    gui.rebuild()
-    gui.autoscale()
-    gui.screenshot()
-
-    # 可選：更新位置
-    # u_shape.update_position(1, 1)
-
-    # 可選：更新尺寸
-    # u_shape.update_dimensions(bl=0.5, sh=0.2, tw=0.01)
-
-    return u_shape
-
-
-# === 快速創建函數 ===
 def create_u_shape(design, cx, cy, name='u_shape', bl=0.3, sh=0.1, tw=0.01):
     """
     快速創建 U 形元件的便利函數
-
-    Args:
-        design: 設計物件
-        cx, cy: 中心座標
-        name: 元件名稱
-        bl: 底部寬度
-        sh: 側邊高度  
-        tw: 線條厚度
-
-    Returns:
-        UShapeComponent: U 形元件實例
     """
     u_shape = UShapeComponent(design, name, bl, sh, tw)
     u_shape.create(cx, cy)
     return u_shape
-    
-import numpy as np
-
-from collections import OrderedDict
-
-from qiskit_metal import QComponent
-
-from qiskit_metal.qlibrary.tlines.anchored_path import RouteAnchors
-from qiskit_metal.qlibrary.tlines.straight_path import RouteStraight
 
 
 class VirtualJunction(QComponent):
     """
-    用來作為 TreeRoute 分岔點的隱形元件。
+    用來作為 TreeRoute / GraphRoute 分岔點的隱形元件。
 
     可以根據輸入動態產生任意數量的 pins，
     讓 RouteAnchors / RouteStraight 附著。
@@ -537,25 +209,10 @@ class VirtualJunction(QComponent):
     本身不產生任何金屬圖形，只提供連接點。
     """
 
-    default_options = dict(
-        # dict of:
-        # pin_name: {
-        #     'points': [[x1, y1], [x2, y2]],
-        #     'width': 10
-        # }
-        pins={}
-    )
+    default_options = dict(pins={})
 
     def make(self):
         for pin_name, pinfo in self.p.pins.items():
-
-            # input_as_norm=True:
-            #
-            # points[0] -> points[1] 的方向會被當成 normal
-            #
-            # 注意：
-            # 實際 middle 的定義依 Qiskit Metal add_pin()
-            # 的處理方式而定。
             self.add_pin(
                 pin_name,
                 pinfo['points'],
@@ -566,81 +223,15 @@ class VirtualJunction(QComponent):
 
 class TreeRoute:
     """
-    將多個 RouteAnchors / RouteStraight
-    組合成樹狀結構的管理器。
+    直覺路徑線路管理器 (Path-based Route Manager)。
 
     功能：
     --------------------------------------------------
-    1. 自動建立 VirtualJunction
-    2. 自動建立各段 route
-    3. 有 anchors -> RouteAnchors
-    4. 無 anchors -> RouteStraight
-    5. 支援任意層數的 branch
-    6. 提供 route / junction 存取
-    7. 提供總長度計算
-
-
-    tree_config 範例
-    --------------------------------------------------
-
-    {
-        'name': 'root',
-
-        'start_pin': {
-            'component': 'port1',
-            'pin': 'tie'
-        },
-
-        'anchors': OrderedDict({
-            1: [0, 1]
-        }),
-
-        'junction_coord': [0, 2],
-
-        'branches': [
-            {
-                'name': 'branchA',
-
-                'anchors': OrderedDict({
-                    1: [1, 2]
-                }),
-
-                'end_pin': {
-                    'component': 'short1',
-                    'pin': 'short'
-                }
-            },
-
-            {
-                'name': 'branchB',
-
-                'anchors': OrderedDict(),
-
-                'junction_coord': [-1, 3],
-
-                'branches': [
-                    ...
-                ]
-            }
-        ]
-    }
-
-
-    Route 選擇：
-    --------------------------------------------------
-
-    anchors != empty
-        -> RouteAnchors
-
-    anchors == empty
-        -> RouteStraight
-
-    這樣可以避免 RouteAnchors 在 anchors 為空時，
-    某些幾何條件造成：
-
-        np.concatenate([])
-
-    的錯誤。
+    1. 使用者直接定義走線的完整路徑 (`path`)，包含頭尾與中間折點。
+    2. 自動比對節點座標，當多條走線在某個座標相交重疊時，自動建立 `VirtualJunction`。
+    3. 當走線端點設定為 short (或寫 'short')，自動推算向度並建立 `ShortToGround` (命名為 `{route_name}__stg`)。
+    4. 自動從完整 `path` 中抽離中間折點作為 `RouteAnchors` 的 `anchors`。
+    5. 無折點時使用 `RouteStraight`。
     """
 
     def __init__(
@@ -654,7 +245,6 @@ class TreeRoute:
         lead_in='0mm',
         lead_out='0mm'
     ):
-
         self.design = design
         self.name = name
         self.tree_config = tree_config
@@ -667,586 +257,336 @@ class TreeRoute:
         self.lead_in = lead_in
         self.lead_out = lead_out
 
-        # 保存所有產生的：
-        #
-        # RouteAnchors
-        # RouteStraight
-        #
-        # 格式：
-        #
-        # {
-        #     'tree_root': instance,
-        #     'tree_branchA': instance,
-        #     ...
-        # }
         self.routes = {}
-
-        # 保存所有 VirtualJunction
-        #
-        # {
-        #     'tree_root_junc': instance,
-        #     ...
-        # }
         self.junctions = {}
+        self.shorts = {}
 
-        # 建立整棵 routing tree
-        self._build_tree(self.tree_config)
+        self._build_tree()
 
+    def _get_pin_coord(self, pin_dict):
+        comp = self.design.components[pin_dict['component']]
+        return np.asarray(comp.pins[pin_dict['pin']]['middle'], dtype=float)
 
-    # =========================================================
-    # Utility
-    # =========================================================
-
-    def _get_coord(self, pin_dict):
-        """
-        根據：
-
-        {
-            'component': component_name,
-            'pin': pin_name
-        }
-
-        取得 pin 的 middle coordinate。
-        """
-
-        comp = self.design.components[
-            pin_dict['component']
-        ]
-
-        return comp.pins[
-            pin_dict['pin']
-        ]['middle']
-
-
-    def _make_pin_points(
-        self,
-        jx,
-        jy,
-        toward_x,
-        toward_y,
-        step=0.01
-    ):
-        """
-        建立 VirtualJunction pin 所需的兩個點。
-
-        In Qiskit Metal `QComponent.add_pin(..., input_as_norm=True)`:
-            points[1] is assigned as the pin's `middle` position,
-            and (points[1] - points[0]) / norm is assigned as the outward `normal` vector.
-
-        For an output pin pointing towards (toward_x, toward_y):
-            - `middle` must be exactly [jx, jy].
-            - `normal` vector points towards (toward_x, toward_y).
-            - points[0] = [jx - ux * step, jy - uy * step]
-            - points[1] = [jx, jy]
-        """
-
+    def _make_pin_points(self, jx, jy, toward_x, toward_y, step=0.01):
         dx = toward_x - jx
         dy = toward_y - jy
-
         mag = np.hypot(dx, dy)
-
-        if mag == 0:
-            ux = 1.0
-            uy = 0.0
-
-        else:
-            ux = dx / mag
-            uy = dy / mag
-
+        ux = dx / mag if mag != 0 else 1.0
+        uy = dy / mag if mag != 0 else 0.0
         return [
-            [
-                jx - ux * step,
-                jy - uy * step
-            ],
+            [jx - ux * step, jy - uy * step],
             [jx, jy]
         ]
 
+    def _calc_short_orientation(self, v_in):
+        orient = math.degrees(math.atan2(v_in[1], v_in[0])) % 360
+        return orient
 
-    # =========================================================
-    # Tree Builder
-    # =========================================================
+    def _normalize_config(self):
+        if isinstance(self.tree_config, list):
+            return self.tree_config
+        elif isinstance(self.tree_config, dict):
+            if 'routes' in self.tree_config:
+                return self.tree_config['routes']
+            return self._flatten_legacy_config(self.tree_config)
+        return []
 
-    def _build_tree(
-        self,
-        node_config,
-        parent_pin=None
-    ):
-        """
-        遞迴建立 routing tree。
-        """
+    def _flatten_legacy_config(self, node, parent_pin=None):
+        routes = []
+        name = node.get('name', 'node')
+        start_pin = node.get('start_pin', parent_pin)
+        anchors_dict = node.get('anchors', OrderedDict())
+        anchors = [list(v) for v in anchors_dict.values()]
 
-        # -----------------------------------------------------
-        # Route name
-        # -----------------------------------------------------
+        if 'end_pin' in node:
+            path = []
+            if start_pin:
+                path.append(start_pin)
+            path.extend(anchors)
+            path.append(node['end_pin'])
+            routes.append({'name': name, 'path': path})
+        elif 'junction_coord' in node:
+            j_coord = node['junction_coord']
+            path = []
+            if start_pin:
+                path.append(start_pin)
+            path.extend(anchors)
+            path.append(j_coord)
+            routes.append({'name': name, 'path': path})
 
-        node_name = node_config.get(
-            'name',
-            str(len(self.routes))
-        )
+            branches = node.get('branches', [])
+            for branch in branches:
+                routes.extend(self._flatten_legacy_config(branch, j_coord))
+        return routes
 
-        route_name = f"{self.name}_{node_name}"
+    def _parse_endpoint(self, ep_spec, default_coord=None):
+        if ep_spec == 'short' or (isinstance(ep_spec, dict) and ep_spec.get('short')):
+            coord = None
+            if isinstance(ep_spec, dict) and 'coord' in ep_spec:
+                coord = np.asarray(ep_spec['coord'], dtype=float)
+            elif default_coord is not None:
+                coord = np.asarray(default_coord, dtype=float)
+            return 'short', coord
+        elif isinstance(ep_spec, dict) and 'component' in ep_spec and 'pin' in ep_spec:
+            coord = self._get_pin_coord(ep_spec)
+            return 'component', {'spec': ep_spec, 'coord': coord}
+        elif ep_spec is not None:
+            coord = np.asarray(ep_spec, dtype=float)
+            return 'coord', coord
+        return None, None
 
+    def _build_tree(self):
+        route_list = self._normalize_config()
+        if not route_list:
+            return
 
-        # -----------------------------------------------------
-        # Start pin
-        # -----------------------------------------------------
+        parsed_routes = []
+        coord_usage = {}
+        comp_pin_coords = set()
 
-        start_pin = node_config.get(
-            'start_pin',
-            parent_pin
-        )
+        for idx, r_spec in enumerate(route_list):
+            r_name = r_spec.get('name', f"route_{idx}")
+            raw_path = list(r_spec.get('path', []))
 
+            start_spec = r_spec.get('start') or r_spec.get('start_pin')
+            end_spec = r_spec.get('end') or r_spec.get('end_pin')
 
-        # -----------------------------------------------------
-        # Anchors
-        # -----------------------------------------------------
+            if start_spec is None and len(raw_path) > 0:
+                start_spec = raw_path[0]
+                raw_path = raw_path[1:]
 
-        anchors_dict = node_config.get(
-            'anchors',
-            OrderedDict()
-        )
+            if end_spec is None and len(raw_path) > 0:
+                end_spec = raw_path[-1]
+                raw_path = raw_path[:-1]
 
-        anchors = OrderedDict()
+            middle_coords = []
+            for item in raw_path:
+                if isinstance(item, (list, tuple, np.ndarray)):
+                    middle_coords.append(np.asarray(item, dtype=float))
 
-        for k, v in anchors_dict.items():
-            anchors[k] = np.array(
-                v,
-                dtype=float
-            )
+            default_start_coord = middle_coords[0] if middle_coords else None
+            start_type, start_data = self._parse_endpoint(start_spec, default_start_coord)
 
+            default_end_coord = middle_coords[-1] if middle_coords else (start_data if start_type == 'coord' else None)
+            end_type, end_data = self._parse_endpoint(end_spec, default_end_coord)
 
-        # -----------------------------------------------------
-        # End pin
-        # -----------------------------------------------------
+            # If start or end is 'short' or 'component', but path contains the endpoint coordinate,
+            # trim duplicate coordinates from middle_coords.
+            if start_type in ('component', 'short') and start_data is not None and len(middle_coords) > 0:
+                if np.allclose(middle_coords[0], start_data if start_type == 'short' else start_data['coord']):
+                    middle_coords = middle_coords[1:]
 
-        end_pin = None
+            if end_type in ('component', 'short') and end_data is not None and len(middle_coords) > 0:
+                if np.allclose(middle_coords[-1], end_data if end_type == 'short' else end_data['coord']):
+                    middle_coords = middle_coords[:-1]
 
+            full_coords = []
+            if start_type == 'component':
+                full_coords.append(start_data['coord'])
+                comp_pin_coords.add((round(start_data['coord'][0], 6), round(start_data['coord'][1], 6)))
+            elif start_type in ('coord', 'short'):
+                full_coords.append(start_data)
 
-        # =====================================================
-        # Case 1
-        #
-        # Leaf node：
-        # 已經有真正的 end_pin
-        # =====================================================
+            full_coords.extend(middle_coords)
 
-        if 'end_pin' in node_config:
+            if end_type == 'component':
+                full_coords.append(end_data['coord'])
+                comp_pin_coords.add((round(end_data['coord'][0], 6), round(end_data['coord'][1], 6)))
+            elif end_type in ('coord', 'short'):
+                full_coords.append(end_data)
 
-            end_pin = node_config['end_pin']
+            parsed_routes.append({
+                'name': r_name,
+                'full_name': f"{self.name}_{r_name}",
+                'start_type': start_type,
+                'start_data': start_data,
+                'end_type': end_type,
+                'end_data': end_data,
+                'coords': full_coords
+            })
 
+            start_coord = full_coords[0]
+            start_key = (round(start_coord[0], 6), round(start_coord[1], 6))
+            if start_type not in ('component', 'short'):
+                next_pt = full_coords[1] if len(full_coords) > 1 else start_coord
+                if start_key not in coord_usage:
+                    coord_usage[start_key] = []
+                coord_usage[start_key].append((idx, 'start', next_pt, start_coord))
 
-        # =====================================================
-        # Case 2
-        #
-        # Junction node
-        # =====================================================
+            end_coord = full_coords[-1]
+            end_key = (round(end_coord[0], 6), round(end_coord[1], 6))
+            if end_type not in ('component', 'short'):
+                prev_pt = full_coords[-2] if len(full_coords) > 1 else end_coord
+                if end_key not in coord_usage:
+                    coord_usage[end_key] = []
+                coord_usage[end_key].append((idx, 'end', prev_pt, end_coord))
 
-        elif 'junction_coord' in node_config:
+        # 1. Create VirtualJunctions for shared coordinates
+        for coord_key, connections in coord_usage.items():
+            if len(connections) >= 2 and coord_key not in comp_pin_coords:
+                jx, jy = connections[0][3]
+                j_base_name = f"{self.name}_junc_{len(self.junctions) + 1}"
 
-            jx, jy = node_config[
-                'junction_coord'
-            ]
+                pins_config = {}
+                for route_idx, role, pt, _ in connections:
+                    r_item = parsed_routes[route_idx]
+                    pin_name = f"pin_{r_item['name']}"
+                    in_pts = self._make_pin_points(jx, jy, pt[0], pt[1])
+                    pins_config[pin_name] = {
+                        'points': in_pts,
+                        'width': self.trace_width
+                    }
 
-            j_name = f"{route_name}_junc"
-
-
-            # -------------------------------------------------
-            # 找 junction 的來源方向
-            # -------------------------------------------------
-
-            if len(anchors) > 0:
-
-                # 最後一個 anchor
-                prev_pt = list(
-                    anchors.values()
-                )[-1]
-
-            else:
-
-                # 沒有 anchor
-                # 直接看 start pin
-                prev_pt = self._get_coord(
-                    start_pin
+                vj = VirtualJunction(
+                    self.design,
+                    j_base_name,
+                    options=dict(pins=pins_config)
                 )
+                self.junctions[j_base_name] = vj
 
-
-            # -------------------------------------------------
-            # Junction input pin
-            #
-            # normal 朝來源方向
-            # -------------------------------------------------
-
-            in_pts = self._make_pin_points(
-                jx,
-                jy,
-                prev_pt[0],
-                prev_pt[1]
-            )
-
-
-            pins_config = {
-
-                'in': {
-                    'points': in_pts,
-                    'width': self.trace_width
-                }
-
-            }
-
-
-            # -------------------------------------------------
-            # Branches
-            # -------------------------------------------------
-
-            branches = node_config.get(
-                'branches',
-                []
-            )
-
-
-            # -------------------------------------------------
-            # 建立所有 output pins
-            # -------------------------------------------------
-
-            for idx, branch in enumerate(
-                branches
-            ):
-
-                pin_name = f'out_{idx}'
-
-                b_anchors = branch.get(
-                    'anchors',
-                    OrderedDict()
-                )
-
-
-                # ---------------------------------------------
-                # Branch 有 anchor
-                # ---------------------------------------------
-
-                if len(b_anchors) > 0:
-
-                    next_pt = list(
-                        b_anchors.values()
-                    )[0]
-
-
-                # ---------------------------------------------
-                # Branch 無 anchor
-                # ---------------------------------------------
-
-                else:
-
-                    if 'end_pin' in branch:
-
-                        next_pt = self._get_coord(
-                            branch['end_pin']
-                        )
-
-                    elif 'junction_coord' in branch:
-
-                        next_pt = branch[
-                            'junction_coord'
-                        ]
-
+                for route_idx, role, _, _ in connections:
+                    r_item = parsed_routes[route_idx]
+                    pin_name = f"pin_{r_item['name']}"
+                    if role == 'start':
+                        r_item['start_type'] = 'junction'
+                        r_item['start_data'] = {'component': j_base_name, 'pin': pin_name}
                     else:
+                        r_item['end_type'] = 'junction'
+                        r_item['end_data'] = {'component': j_base_name, 'pin': pin_name}
 
-                        # fallback
-                        next_pt = [
-                            jx,
-                            jy - 1
-                        ]
+        # 2. Create ShortToGround components for 'short' endpoints
+        for r_item in parsed_routes:
+            full_name = r_item['full_name']
+            coords = r_item['coords']
 
-
-                # ---------------------------------------------
-                # Output pin normal 朝 branch 方向
-                # ---------------------------------------------
-
-                out_pts = self._make_pin_points(
-                    jx,
-                    jy,
-                    next_pt[0],
-                    next_pt[1]
+            if r_item['start_type'] == 'short':
+                stg_coord = coords[0]
+                next_pt = coords[1] if len(coords) > 1 else stg_coord
+                v_in = stg_coord - next_pt
+                orient = self._calc_short_orientation(v_in)
+                stg_name = f"{full_name}__stg"
+                stg = ShortToGround(
+                    self.design,
+                    stg_name,
+                    options=dict(
+                        pos_x=f"{stg_coord[0]}mm",
+                        pos_y=f"{stg_coord[1]}mm",
+                        orientation=orient,
+                        width=self.trace_width
+                    )
                 )
+                self.shorts[stg_name] = stg
+                r_item['start_type'] = 'short_obj'
+                r_item['start_data'] = {'component': stg_name, 'pin': 'short'}
 
-
-                pins_config[
-                    pin_name
-                ] = {
-
-                    'points': out_pts,
-
-                    'width':
-                        self.trace_width
-
-                }
-
-
-            # =================================================
-            # 建立 Virtual Junction
-            # =================================================
-
-            junction = VirtualJunction(
-                self.design,
-                j_name,
-                options=dict(
-                    pins=pins_config
+            if r_item['end_type'] == 'short':
+                stg_coord = coords[-1]
+                prev_pt = coords[-2] if len(coords) > 1 else stg_coord
+                v_in = stg_coord - prev_pt
+                orient = self._calc_short_orientation(v_in)
+                stg_name = f"{full_name}__stg"
+                stg = ShortToGround(
+                    self.design,
+                    stg_name,
+                    options=dict(
+                        pos_x=f"{stg_coord[0]}mm",
+                        pos_y=f"{stg_coord[1]}mm",
+                        orientation=orient,
+                        width=self.trace_width
+                    )
                 )
+                self.shorts[stg_name] = stg
+                r_item['end_type'] = 'short_obj'
+                r_item['end_data'] = {'component': stg_name, 'pin': 'short'}
+
+        # 3. Create Routes
+        for r_item in parsed_routes:
+            full_name = r_item['full_name']
+            coords = r_item['coords']
+
+            if r_item['start_type'] == 'component':
+                start_pin = r_item['start_data']['spec']
+            elif r_item['start_type'] in ('junction', 'short_obj'):
+                start_pin = r_item['start_data']
+            else:
+                raise ValueError(f"Route {full_name} has invalid start specification")
+
+            if r_item['end_type'] == 'component':
+                end_pin = r_item['end_data']['spec']
+            elif r_item['end_type'] in ('junction', 'short_obj'):
+                end_pin = r_item['end_data']
+            else:
+                raise ValueError(f"Route {full_name} has invalid end specification")
+
+            intermediate_pts = coords[1:-1]
+            anchors = OrderedDict(
+                (i + 1, np.asarray(pt, dtype=float))
+                for i, pt in enumerate(intermediate_pts)
             )
 
-
-            self.junctions[
-                j_name
-            ] = junction
-
-
-            # -------------------------------------------------
-            # Parent route 的終點
-            # -------------------------------------------------
-
-            end_pin = {
-                'component': j_name,
-                'pin': 'in'
-            }
-
-
-        # =====================================================
-        # 建立目前這一段 Route
-        # =====================================================
-
-        if start_pin is not None and end_pin is not None:
-
-            # 所有 route 共用設定
             common_options = dict(
-
                 pin_inputs=dict(
-
                     start_pin=start_pin,
-
                     end_pin=end_pin
-
                 ),
-
                 trace_width=self.trace_width,
-
                 trace_gap=self.trace_gap,
-
                 lead=dict(
-
                     start_straight=self.lead_in,
-
                     end_straight=self.lead_out
-
                 )
             )
-
-
-            # =================================================
-            # 沒有 Anchors
-            #
-            # 使用 RouteStraight
-            # =================================================
 
             if len(anchors) == 0:
-
                 route = RouteStraight(
                     self.design,
-                    route_name,
+                    full_name,
                     options=common_options
                 )
-
-
-            # =================================================
-            # 有 Anchors
-            #
-            # 使用 RouteAnchors
-            # =================================================
-
             else:
-
-                route_options = dict(
-                    common_options
-                )
-
+                route_options = dict(common_options)
                 route_options.update(
                     anchors=anchors,
                     fillet=self.fillet
                 )
-
                 route = RouteAnchors(
                     self.design,
-                    route_name,
+                    full_name,
                     options=route_options
                 )
 
-
-            # 保存 route instance
-            self.routes[
-                route_name
-            ] = route
-
-
-        # =====================================================
-        # 建立 Child Routes
-        #
-        # 注意：
-        #
-        # 這裡刻意放在目前 route 建立完成之後。
-        #
-        # 順序：
-        #
-        # VirtualJunction
-        #       ↓
-        # Parent Route
-        #       ↓
-        # Child Routes
-        #
-        # dependency 比較清楚。
-        # =====================================================
-
-        if (
-            'junction_coord' in node_config
-            and 'end_pin' not in node_config
-        ):
-
-            j_name = f"{route_name}_junc"
-
-            branches = node_config.get(
-                'branches',
-                []
-            )
-
-            for idx, branch in enumerate(
-                branches
-            ):
-
-                child_start_pin = {
-
-                    'component':
-                        j_name,
-
-                    'pin':
-                        f'out_{idx}'
-
-                }
-
-                self._build_tree(
-                    branch,
-                    child_start_pin
-                )
-
-
-    # =========================================================
-    # Length
-    # =========================================================
+            self.routes[full_name] = route
 
     def get_total_length(self):
-        """
-        計算所有 route 的幾何總長度。
-
-        包含：
-
-        - RouteAnchors
-        - RouteStraight
-
-        如果某個 route 尚未 build 或 length 無法讀取，
-        則跳過該 route。
-        """
-
         total = 0.0
-
         for route in self.routes.values():
-
             try:
-
                 total += route.length
-
             except Exception:
-
                 pass
-
         return total
 
-
-    # =========================================================
-    # Route Access
-    # =========================================================
-
     def get_route(self, name):
-        """
-        取得指定名稱的 route。
-
-        例如：
-
-            tree.get_route('branchA')
-
-        實際尋找：
-
-            <tree_name>_branchA
-
-        回傳可能為：
-
-            RouteAnchors
-
-        或：
-
-            RouteStraight
-        """
-
-        return self.routes.get(
-            f"{self.name}_{name}"
-        )
-
-
-    # =========================================================
-    # Junction Access
-    # =========================================================
+        if name in self.routes:
+            return self.routes[name]
+        return self.routes.get(f"{self.name}_{name}")
 
     def get_junction(self, name):
-        """
-        取得某個 node 所建立的 VirtualJunction。
-
-        例如：
-
-            tree.get_junction('root')
-
-        實際尋找：
-
-            <tree_name>_root_junc
-        """
-
-        return self.junctions.get(
-            f"{self.name}_{name}_junc"
-        )
-
-
-    # =========================================================
-    # Debug
-    # =========================================================
+        if name in self.junctions:
+            return self.junctions[name]
+        for j_name, j_obj in self.junctions.items():
+            if name in j_name:
+                return j_obj
+        return None
 
     def print_routes(self):
-        """
-        印出所有 route 與實際使用的 route type。
-        """
-
         print("TreeRoute routes:")
         print("-" * 50)
-
         for name, route in self.routes.items():
-
-            print(
-                f"{name}: "
-                f"{route.__class__.__name__}"
-            )
-
+            print(f"{name}: {route.__class__.__name__}")
 
     def print_junctions(self):
-        """
-        印出所有 VirtualJunction。
-        """
-
         print("TreeRoute junctions:")
         print("-" * 50)
-
         for name in self.junctions:
-
             print(name)
