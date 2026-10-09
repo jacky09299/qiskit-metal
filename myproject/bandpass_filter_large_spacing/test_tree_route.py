@@ -1,7 +1,11 @@
 import os
 
-from qiskit_metal import designs, MetalGUI
-from qiskit_metal.qlibrary.terminations.launchpad_wb import LaunchpadWirebond
+from qiskit_metal import designs
+try:
+    from qiskit_metal import MetalGUI
+except ImportError:
+    MetalGUI = None
+
 from components import TreeRoute
 
 TRACE_WIDTH = '10um'
@@ -43,8 +47,8 @@ def path_coordinates(path):
 
 
 def mirror_point(value):
-    value = point(value)
-    return [round(-value[0], 6), value[1]]
+    val = point(value)
+    return [round(-val[0], 6), val[1]]
 
 
 def mirror_reverse_path(path, component=None, pin='tie'):
@@ -55,6 +59,8 @@ def mirror_reverse_path(path, component=None, pin='tie'):
 
 
 class PathBuilder:
+    """Intuitive path builder using relative directional moves."""
+
     def __init__(self, start):
         self.current = point(start)
         self.path = [list(self.current)]
@@ -73,34 +79,20 @@ class PathBuilder:
         self.path.append(list(self.current))
         return self
 
+    def right(self, dist):
+        return self.move(dx=dist)
+
+    def left(self, dist):
+        return self.move(dx=-dist)
+
+    def up(self, dist):
+        return self.move(dy=dist)
+
+    def down(self, dist):
+        return self.move(dy=-dist)
+
     def to_y(self, y):
         return self.move(dy=round(float(y) - self.current[1], 6))
-
-
-def add_u_cells_from_horizontal(builder, count, direction, depth):
-    sx = 1.0 if direction == 'right' else -1.0
-    for _ in range(count):
-        builder.move(dx=sx * b)
-        builder.move(dy=-depth)
-        builder.move(dx=sx * b)
-        builder.move(dy=depth)
-    return builder
-
-
-def add_u_cells_from_vertical(builder, count, direction, depth):
-    sx = 1.0 if direction == 'right' else -1.0
-    for _ in range(count):
-        builder.move(dy=-depth)
-        builder.move(dx=sx * b)
-        builder.move(dy=depth)
-        builder.move(dx=sx * b)
-    return builder
-
-
-def vertical_stub(start, length, direction):
-    start = point(start)
-    sign = 1.0 if direction == 'up' else -1.0
-    return [start, [start[0], round(start[1] + sign * float(length), 6)]]
 
 
 def derive_geometry():
@@ -142,73 +134,87 @@ def generate_routes(left_tie, right_tie, geometry):
     left_tie = point(left_tie)
     right_tie = point(right_tie)
 
-    # Lower row.
+    # Lower row (t1): start at launch tie, move down-right with n U-cells to inner node.
     p1 = PathBuilder(left_tie)
     p1.path.insert(0, {'component': 'left_launch', 'pin': 'tie'})
-    p1.move(dx=2.0 * b)
-    p1.move(dy=delta - a1)
-    p1.move(dx=b)
-    p1.move(dy=a1)
-    p1.move(dx=b)
-    if n > 1:
-        add_u_cells_from_vertical(p1, n - 1, 'right', a1)
+    p1.right(2.0 * b).down(a1 - delta).right(b).up(a1).right(b)
+    for _ in range(n - 1):
+        p1.down(a1).right(b).up(a1).right(b)
     t1 = p1.path
 
-    # Middle row. After n cells, continue LEFT by b to the blue-circle node.
+    # Middle row (t2): start at inner node, rise to middle baseline, move left with n U-cells to shared node.
     p2 = PathBuilder(geometry['left_inner'])
     p2.to_y(geometry['middle_baseline'])
-    add_u_cells_from_horizontal(p2, n, 'left', a2)
-    p2.move(dx=-b)
+    for _ in range(n):
+        p2.left(b).down(a2).left(b).up(a2)
+    p2.left(b)
     if p2.current != geometry['left_shared']:
         raise ValueError(
             f'Middle endpoint {p2.current} != shared node {geometry["left_shared"]}'
         )
     t2 = p2.path
 
-    # Upper row starts at exactly the same blue-circle node and rises directly.
+    # Upper row (t3): start at shared node, rise to upper baseline, move right with n U-cells to center.
     p3 = PathBuilder(geometry['left_shared'])
     p3.to_y(geometry['upper_baseline'])
-    add_u_cells_from_horizontal(p3, n, 'right', a3)
-    p3.move(dx=b + d)
+    for _ in range(n):
+        p3.right(b).down(a3).right(b).up(a3)
+    p3.right(b + d)
     if p3.current != geometry['center']:
         raise ValueError(
             f'Upper endpoint {p3.current} != center {geometry["center"]}'
         )
     t3 = p3.path
 
+    # Mirror routes for the right half of the symmetric structure.
     t4 = mirror_reverse_path(t3)
     t5 = mirror_reverse_path(t2)
     t6 = mirror_reverse_path(t1, component='right_launch', pin='tie')
     t6[-2] = list(right_tie)
 
-    # lp2 and lp6 now attach to the exact shared middle/upper junctions.
+    # Ground stubs attached to junction nodes.
     stubs = {
         'ground_lp1': {
-            'path': vertical_stub(left_tie, lp1, 'up'),
+            'path': [left_tie, [left_tie[0], round(left_tie[1] + lp1, 6)]],
             'end': 'short',
         },
         'ground_lp2': {
-            'path': vertical_stub(geometry['left_shared'], lp2, 'down'),
+            'path': [
+                geometry['left_shared'],
+                [geometry['left_shared'][0], round(geometry['left_shared'][1] - lp2, 6)],
+            ],
             'end': 'short',
         },
         'ground_lp3': {
-            'path': vertical_stub(geometry['left_inner'], lp3, 'down'),
+            'path': [
+                geometry['left_inner'],
+                [geometry['left_inner'][0], round(geometry['left_inner'][1] - lp3, 6)],
+            ],
             'end': 'short',
         },
         'ground_lp4': {
-            'path': vertical_stub(geometry['center'], lp4, 'down'),
+            'path': [
+                geometry['center'],
+                [geometry['center'][0], round(geometry['center'][1] - lp4, 6)],
+            ],
             'end': 'short',
         },
         'ground_lp5': {
-            'path': vertical_stub(geometry['right_inner'], lp5, 'down'),
+            'path': [
+                geometry['right_inner'],
+                [geometry['right_inner'][0], round(geometry['right_inner'][1] - lp5, 6)],
+            ],
             'end': 'short',
         },
         'ground_lp6': {
-            'path': vertical_stub(geometry['right_shared'], lp6, 'down'),
+            'path': [
+                geometry['right_shared'],
+                [geometry['right_shared'][0], round(geometry['right_shared'][1] - lp6, 6)],
+            ],
             'end': 'short',
         },
         'ground_lp7': {
-            'path': vertical_stub(right_tie, lp7, 'up'),
+            'path': [right_tie, [right_tie[0], round(right_tie[1] + lp7, 6)]],
             'end': 'short',
         },
     }
@@ -238,6 +244,8 @@ def main():
     )
     design.chips.main.size.size_x = f'{chip_width}mm'
     design.chips.main.size.size_y = f'{chip_height}mm'
+
+    from qiskit_metal.qlibrary.terminations.launchpad_wb import LaunchpadWirebond
 
     left_launch = LaunchpadWirebond(
         design,
@@ -289,7 +297,7 @@ def main():
         lead_out='0mm',
     )
 
-    if ENABLE_GUI:
+    if ENABLE_GUI and MetalGUI is not None:
         gui = MetalGUI(design)
         gui.rebuild()
         gui.autoscale()
@@ -301,4 +309,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
