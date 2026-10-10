@@ -1,4 +1,5 @@
 import os
+import numpy as np
 
 from qiskit_metal import designs
 try:
@@ -35,7 +36,7 @@ LAUNCH_TIE_INSET = 0.025
 
 
 def point(value):
-    return [round(float(value[0]), 6), round(float(value[1]), 6)]
+    return [float(value[0]), float(value[1])]
 
 
 def path_coordinates(path):
@@ -48,7 +49,7 @@ def path_coordinates(path):
 
 def mirror_point(value):
     val = point(value)
-    return [round(-val[0], 6), val[1]]
+    return [-val[0], val[1]]
 
 
 def mirror_reverse_path(path, component=None, pin='tie'):
@@ -73,8 +74,8 @@ class PathBuilder:
         if abs(dx) <= 1e-12 and abs(dy) <= 1e-12:
             return self
         self.current = [
-            round(self.current[0] + dx, 6),
-            round(self.current[1] + dy, 6),
+            self.current[0] + dx,
+            self.current[1] + dy,
         ]
         self.path.append(list(self.current))
         return self
@@ -92,10 +93,10 @@ class PathBuilder:
         return self.move(dy=-dist)
 
     def to_y(self, y):
-        return self.move(dy=round(float(y) - self.current[1], 6))
+        return self.move(dy=float(y) - self.current[1])
 
 
-def derive_geometry():
+def derive_geometry(launch_y=LAUNCH_Y):
     half_row_width = n * 2.0 * b
 
     j4_x = -d
@@ -106,7 +107,7 @@ def derive_geometry():
     left_tie_x = j2_x - 2.0 * b
     right_tie_x = -left_tie_x
 
-    lower_baseline = LAUNCH_Y + delta
+    lower_baseline = launch_y + delta
     middle_baseline = lower_baseline + a2 + c
     upper_baseline = middle_baseline + a3 + c
 
@@ -115,7 +116,7 @@ def derive_geometry():
     right_shared_x = j6_x + b
 
     return {
-        'left_tie': point([left_tie_x, LAUNCH_Y]),
+        'left_tie': point([left_tie_x, launch_y]),
         'left_outer': point([j2_x, middle_baseline]),
         'left_shared': point([left_shared_x, middle_baseline]),
         'left_inner': point([j4_x, lower_baseline]),
@@ -123,125 +124,36 @@ def derive_geometry():
         'right_inner': point([j5_x, lower_baseline]),
         'right_outer': point([j6_x, middle_baseline]),
         'right_shared': point([right_shared_x, middle_baseline]),
-        'right_tie': point([right_tie_x, LAUNCH_Y]),
-        'lower_baseline': round(lower_baseline, 6),
-        'middle_baseline': round(middle_baseline, 6),
-        'upper_baseline': round(upper_baseline, 6),
+        'right_tie': point([right_tie_x, launch_y]),
+        'lower_baseline': lower_baseline,
+        'middle_baseline': middle_baseline,
+        'upper_baseline': upper_baseline,
     }
 
+
+import layout_builder
 
 def generate_routes(left_tie, right_tie, geometry):
-    left_tie = point(left_tie)
-    right_tie = point(right_tie)
-
-    # Lower row (t1): start at launch tie, move down-right with n U-cells to inner node.
-    p1 = PathBuilder(left_tie)
-    p1.path.insert(0, {'component': 'left_launch', 'pin': 'tie'})
-    p1.right(2.0 * b).down(a1 - delta).right(b).up(a1).right(b)
-    for _ in range(n - 1):
-        p1.down(a1).right(b).up(a1).right(b)
-    t1 = p1.path
-
-    # Middle row (t2): start at inner node, rise to middle baseline, move left with n U-cells to shared node.
-    p2 = PathBuilder(geometry['left_inner'])
-    p2.to_y(geometry['middle_baseline'])
-    for _ in range(n):
-        p2.left(b).down(a2).left(b).up(a2)
-    p2.left(b)
-    if p2.current != geometry['left_shared']:
-        raise ValueError(
-            f'Middle endpoint {p2.current} != shared node {geometry["left_shared"]}'
-        )
-    t2 = p2.path
-
-    # Upper row (t3): start at shared node, rise to upper baseline, move right with n U-cells to center.
-    p3 = PathBuilder(geometry['left_shared'])
-    p3.to_y(geometry['upper_baseline'])
-    for _ in range(n):
-        p3.right(b).down(a3).right(b).up(a3)
-    p3.right(b + d)
-    if p3.current != geometry['center']:
-        raise ValueError(
-            f'Upper endpoint {p3.current} != center {geometry["center"]}'
-        )
-    t3 = p3.path
-
-    # Mirror routes for the right half of the symmetric structure.
-    t4 = mirror_reverse_path(t3)
-    t5 = mirror_reverse_path(t2)
-    t6 = mirror_reverse_path(t1, component='right_launch', pin='tie')
-    t6[-2] = list(right_tie)
-
-    # Ground stubs attached to junction nodes.
-    stubs = {
-        'ground_lp1': {
-            'path': [left_tie, [left_tie[0], round(left_tie[1] + lp1, 6)]],
-            'end': 'short',
-        },
-        'ground_lp2': {
-            'path': [
-                geometry['left_shared'],
-                [geometry['left_shared'][0], round(geometry['left_shared'][1] - lp2, 6)],
-            ],
-            'end': 'short',
-        },
-        'ground_lp3': {
-            'path': [
-                geometry['left_inner'],
-                [geometry['left_inner'][0], round(geometry['left_inner'][1] - lp3, 6)],
-            ],
-            'end': 'short',
-        },
-        'ground_lp4': {
-            'path': [
-                geometry['center'],
-                [geometry['center'][0], round(geometry['center'][1] - lp4, 6)],
-            ],
-            'end': 'short',
-        },
-        'ground_lp5': {
-            'path': [
-                geometry['right_inner'],
-                [geometry['right_inner'][0], round(geometry['right_inner'][1] - lp5, 6)],
-            ],
-            'end': 'short',
-        },
-        'ground_lp6': {
-            'path': [
-                geometry['right_shared'],
-                [geometry['right_shared'][0], round(geometry['right_shared'][1] - lp6, 6)],
-            ],
-            'end': 'short',
-        },
-        'ground_lp7': {
-            'path': [right_tie, [right_tie[0], round(right_tie[1] + lp7, 6)]],
-            'end': 'short',
-        },
-    }
-
-    # Shared-junction consistency checks.
-    if path_coordinates(t2)[-1] != geometry['left_shared']:
-        raise ValueError('t2 does not end at left shared junction')
-    if path_coordinates(t3)[0] != geometry['left_shared']:
-        raise ValueError('t3 does not start at left shared junction')
-    if stubs['ground_lp2']['path'][0] != geometry['left_shared']:
-        raise ValueError('ground_lp2 does not start at left shared junction')
-
-    return (t1, t2, t3, t4, t5, t6), stubs
+    return layout_builder.generate_routes(
+        left_tie, right_tie, geometry,
+        a1, a2, a3, b, c, d, delta, n,
+        [lp1, lp2, lp3, lp4, lp5, lp6, lp7],
+        left_component='left_launch',
+        right_component='right_launch'
+    )
 
 
 def main():
-    geometry = derive_geometry()
-
-    left_launch_x = geometry['left_tie'][0] - LAUNCH_TIE_INSET
-    right_launch_x = geometry['right_tie'][0] + LAUNCH_TIE_INSET
+    half_row_width = n * 2.0 * b
+    j4_x = -d
+    j2_x = j4_x - half_row_width
+    left_tie_x = j2_x - 2.0 * b
+    left_launch_x = left_tie_x - LAUNCH_TIE_INSET
+    right_launch_x = -left_launch_x
 
     design = designs.DesignPlanar(overwrite_enabled=True)
     chip_width = 2.0 * abs(left_launch_x) + 2.0
-    chip_height = max(
-        14.0,
-        geometry['upper_baseline'] - (LAUNCH_Y - a1) + 4.0,
-    )
+    chip_height = 14.0
     design.chips.main.size.size_x = f'{chip_width}mm'
     design.chips.main.size.size_y = f'{chip_height}mm'
 
@@ -272,6 +184,8 @@ def main():
 
     left_tie = point(left_launch.pins['tie']['middle'])
     right_tie = point(right_launch.pins['tie']['middle'])
+
+    geometry = derive_geometry(launch_y=left_tie[1])
 
     routes, stubs = generate_routes(left_tie, right_tie, geometry)
     t1, t2, t3, t4, t5, t6 = routes

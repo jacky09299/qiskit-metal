@@ -1,6 +1,9 @@
 import qiskit_metal as metal
 from qiskit_metal import designs, draw
-from qiskit_metal import MetalGUI
+try:
+    from qiskit_metal import MetalGUI
+except ImportError:
+    MetalGUI = None
 
 import config
 import layout_builder
@@ -12,7 +15,7 @@ def main():
     # 1. 初始化 Design 與 GUI
     # ==========================================
     design = designs.DesignPlanar()
-    gui = MetalGUI(design)
+    gui = MetalGUI(design) if MetalGUI is not None else None
     design.overwrite_enabled = True
     design.chips.main.size.size_x = '10 mm'
     #design.chips.main.size.size_x = '8.8 mm'
@@ -57,9 +60,10 @@ def main():
     # ==========================================
     # 3. 刷新 GUI 並截圖
     # ==========================================
-    gui.rebuild()
-    gui.autoscale()
-    gui.screenshot()
+    if gui is not None:
+        gui.rebuild()
+        gui.autoscale()
+        gui.screenshot()
 
     design.components.keys()
     
@@ -94,9 +98,10 @@ def main():
     print(f"成功導出 GDS: {config.save_file_name}")
     
     # 保持 GUI 視窗開啟
-    print("開啟 GUI... (請手動關閉視窗以結束程式)")
-    gui.main_window.show()
-    gui.qApp.exec_()
+    if gui is not None:
+        print("開啟 GUI... (請手動關閉視窗以結束程式)")
+        gui.main_window.show()
+        gui.qApp.exec_()
 
 if __name__ == "__main__":
     main()
