@@ -29,8 +29,8 @@ def main():
     
 
     # 只需要在這裡輸入各段距離和對應的長度
-    segments = [8652.57, 9563.69, 9691.28, 9691.28, 9563.69, 8652.57]
-    length_p = [1133.57, 211.113, 104.681, 82.6346, 104.681, 211.113, 1133.57]
+    segments = [8333.2, 9610.17, 9888.05, 9888.05, 9610.17, 8333.2]
+    length_p = [1955.08, 513.076, 262.567, 224.401, 262.567, 513.076, 1955.08]
     
     # 自動計算其他所有需要的參數
     segments = [x / 1000 for x in segments]
@@ -44,7 +44,7 @@ def main():
     if 'port_R4' in design.components: port_R4 = design.components['port_R4']
     S_target = abs(port_R4.pins['tie']['middle'][0] - port_L4.pins['tie']['middle'][0])  # 目標水平總跨距 S
     print("S_target: ", S_target)
-    a1, a2, a3, b, c, d, delta, n = utils.get_filter_geometry_parameter(segments, S=S_target, b0=0.4, c=0.2, d=0.2, bound=1.2)
+    a1, a2, a3, b, c, d, delta, n = utils.get_filter_geometry_parameter(segments, S=S_target, b0=0.4, c=0.4, d=0.2, bound=1.2)
     print(a1, a2, a3, b, c, d, delta, n)
     layout_builder.build_tree(design, config, a1, a2, a3, b, c, d, delta, n, length_p)
     #layout_builder.build_transmission_lines(design, config)
@@ -52,7 +52,7 @@ def main():
     #layout_builder.build_resonators(design, config)
     #layout_builder.build_bias_lines(design, config)
     #layout_builder.build_coupling_pad(design, config, folded_path, n_folds, folded_TL)
-    layout_builder.build_markers(design, config)
+    #layout_builder.build_markers(design, config)
 
     # ==========================================
     # 3. 刷新 GUI 並截圖
@@ -90,7 +90,7 @@ def main():
     #design.renderers.gds.options['chord_error'] = '1um'
 
     print("Before export")
-    design.renderers.gds.export_to_gds(config.save_file_name)
+    #design.renderers.gds.export_to_gds(config.save_file_name)
     print(f"成功導出 GDS: {config.save_file_name}")
     
     # 保持 GUI 視窗開啟
