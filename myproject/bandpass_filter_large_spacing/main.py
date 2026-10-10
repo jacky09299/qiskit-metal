@@ -44,7 +44,7 @@ def main():
     if 'port_R4' in design.components: port_R4 = design.components['port_R4']
     S_target = abs(port_R4.pins['tie']['middle'][0] - port_L4.pins['tie']['middle'][0])  # 目標水平總跨距 S
     print("S_target: ", S_target)
-    a1, a2, a3, b, c, d, delta, n = utils.get_filter_geometry_parameter(segments, S=S_target, b0=0.4, c=0.2, d=0.25, bound=1.2)
+    a1, a2, a3, b, c, d, delta, n = utils.get_filter_geometry_parameter(segments, S=S_target, b0=0.4, c=0.2, d=0.2, bound=1.2)
     print(a1, a2, a3, b, c, d, delta, n)
     layout_builder.build_tree(design, config, a1, a2, a3, b, c, d, delta, n, length_p)
     #layout_builder.build_transmission_lines(design, config)
