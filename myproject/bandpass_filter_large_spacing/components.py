@@ -570,7 +570,8 @@ class TreeRoute:
                 lead=dict(
                     start_straight=self.lead_in,
                     end_straight=self.lead_out
-                )
+                ),
+                hfss_wire_bonds = True
             )
 
             if len(anchors) == 0:

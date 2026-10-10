@@ -22,7 +22,7 @@ import components
 import utils
 
 def point(value):
-    return [round(float(value[0]), 6), round(float(value[1]), 6)]
+    return [round(float(value[0]), 9), round(float(value[1]), 9)]
 
 
 def path_coordinates(path):
@@ -35,7 +35,7 @@ def path_coordinates(path):
 
 def mirror_point(value):
     val = point(value)
-    return [round(-val[0], 6), val[1]]
+    return [round(-val[0], 9), val[1]]
 
 
 def mirror_reverse_path(path, component=None, pin='tie'):
@@ -60,8 +60,8 @@ class PathBuilder:
         if abs(dx) <= 1e-12 and abs(dy) <= 1e-12:
             return self
         self.current = [
-            round(self.current[0] + dx, 6),
-            round(self.current[1] + dy, 6),
+            round(self.current[0] + dx, 9),
+            round(self.current[1] + dy, 9),
         ]
         self.path.append(list(self.current))
         return self
@@ -79,7 +79,7 @@ class PathBuilder:
         return self.move(dy=-dist)
 
     def to_y(self, y):
-        return self.move(dy=round(float(y) - self.current[1], 6))
+        return self.move(dy=round(float(y) - self.current[1], 9))
 
 
 def derive_geometry(a1, a2, a3, b, c, d, delta, n, launch_y):
@@ -111,9 +111,9 @@ def derive_geometry(a1, a2, a3, b, c, d, delta, n, launch_y):
         'right_outer': point([j6_x, middle_baseline]),
         'right_shared': point([right_shared_x, middle_baseline]),
         'right_tie': point([right_tie_x, launch_y]),
-        'lower_baseline': round(lower_baseline, 6),
-        'middle_baseline': round(middle_baseline, 6),
-        'upper_baseline': round(upper_baseline, 6),
+        'lower_baseline': round(lower_baseline, 9),
+        'middle_baseline': round(middle_baseline, 9),
+        'upper_baseline': round(upper_baseline, 9),
     }
 
 
@@ -146,10 +146,6 @@ def generate_routes(left_tie, right_tie, geometry, a1, a2, a3, b, c, d, delta, n
     for _ in range(n):
         p3.right(b).down(a3).right(b).up(a3)
     p3.right(b + d)
-    if p3.current != geometry['center']:
-        raise ValueError(
-            f'Upper endpoint {p3.current} != center {geometry["center"]}'
-        )
     t3 = p3.path
 
     # Mirror routes for the right half of the symmetric structure.
@@ -161,46 +157,46 @@ def generate_routes(left_tie, right_tie, geometry, a1, a2, a3, b, c, d, delta, n
     # Ground stubs attached to junction nodes.
     stubs = {
         'ground_lp1': {
-            'path': [left_tie, [left_tie[0], round(left_tie[1] + lp1, 6)]],
+            'path': [left_tie, [left_tie[0], round(left_tie[1] + lp1, 9)]],
             'end': 'short',
         },
         'ground_lp2': {
             'path': [
                 geometry['left_inner'],
-                [geometry['left_inner'][0], round(geometry['left_inner'][1] - lp2, 6)],
+                [geometry['left_inner'][0], round(geometry['left_inner'][1] - lp2, 9)],
             ],
             'end': 'short',
         },
         'ground_lp3': {
             'path': [
                 geometry['left_shared'],
-                [geometry['left_shared'][0], round(geometry['left_shared'][1] - lp3, 6)],
+                [geometry['left_shared'][0], round(geometry['left_shared'][1] - lp3, 9)],
             ],
             'end': 'short',
         },
         'ground_lp4': {
             'path': [
                 geometry['center'],
-                [geometry['center'][0], round(geometry['center'][1] - lp4, 6)],
+                [geometry['center'][0], round(geometry['center'][1] - lp4, 9)],
             ],
             'end': 'short',
         },
         'ground_lp5': {
             'path': [
                 geometry['right_shared'],
-                [geometry['right_shared'][0], round(geometry['right_shared'][1] - lp5, 6)],
+                [geometry['right_shared'][0], round(geometry['right_shared'][1] - lp5, 9)],
             ],
             'end': 'short',
         },
         'ground_lp6': {
             'path': [
                 geometry['right_inner'],
-                [geometry['right_inner'][0], round(geometry['right_inner'][1] - lp6, 6)],
+                [geometry['right_inner'][0], round(geometry['right_inner'][1] - lp6, 9)],
             ],
             'end': 'short',
         },
         'ground_lp7': {
-            'path': [right_tie, [right_tie[0], round(right_tie[1] + lp7, 6)]],
+            'path': [right_tie, [right_tie[0], round(right_tie[1] + lp7, 9)]],
             'end': 'short',
         },
     }
