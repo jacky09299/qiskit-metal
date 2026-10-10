@@ -140,31 +140,31 @@ configs = {
         "draw_couple_line_2": False,
     },
     "onlyBPF": {
-        "draw_L1": False,
-        "draw_L2": False,
-        "draw_L3": False,
+        "draw_L1": True,
+        "draw_L2": True,
+        "draw_L3": True,
         "draw_L4": True,
-        "draw_R1": False,
-        "draw_R2": False,
-        "draw_R3": False,
+        "draw_R1": True,
+        "draw_R2": True,
+        "draw_R3": True,
         "draw_R4": True,
         "reso_freq": 5,
         "draw_TL_anchors": False,
-        "draw_pocket_1": False,
-        "draw_pocket_2": False,
-        "draw_qubit_1": False,
-        "draw_qubit_2": False,
+        "draw_pocket_1": True,
+        "draw_pocket_2": True,
+        "draw_qubit_1": True,
+        "draw_qubit_2": True,
         "draw_reso_1": False,
         "draw_reso_2": False,
-        "draw_fl_1": False,
-        "draw_fl_2": False,
-        "draw_cl_1": False,
-        "draw_cl_2": False,
+        "draw_fl_1": True,
+        "draw_fl_2": True,
+        "draw_cl_1": True,
+        "draw_cl_2": True,
         "draw_folded_TL": True,
-        "draw_coupling_pad_1": False,
-        "draw_coupling_pad_2": False,
-        "draw_couple_line_1": False,
-        "draw_couple_line_2": False,
+        "draw_coupling_pad_1": True,
+        "draw_coupling_pad_2": True,
+        "draw_couple_line_1": True,
+        "draw_couple_line_2": True,
     }
 }    
 
@@ -230,10 +230,11 @@ draw_TL_straight = False
 
 
 qubit_1_posx = 0.05
-qubit_1_posy = -2
+qubit_1_posy = 2
 qubit_2_posx = 1.350
-qubit_2_posy = -2
-
+qubit_2_posy = 2
+qubit_1_coupling_position_number = 2
+qubit_2_coupling_position_number = 2
 
 cpw_width = 0.01
 cpw_gap = 0.006

@@ -48,10 +48,10 @@ def main():
     print(a1, a2, a3, b, c, d, delta, n)
     layout_builder.build_tree(design, config, a1, a2, a3, b, c, d, delta, n, length_p)
     #layout_builder.build_transmission_lines(design, config)
-    #layout_builder.build_qubits(design, config)
+    layout_builder.build_qubits(design, config, a1, a2, a3, b, c, d, delta)
     #layout_builder.build_resonators(design, config)
-    #layout_builder.build_bias_lines(design, config)
-    #layout_builder.build_coupling_pad(design, config, folded_path, n_folds, folded_TL)
+    layout_builder.build_bias_lines(design, config)
+    layout_builder.build_coupling_pad(design, config, a1, a2, a3, b, c, d, delta)
     #layout_builder.build_markers(design, config)
 
     # ==========================================

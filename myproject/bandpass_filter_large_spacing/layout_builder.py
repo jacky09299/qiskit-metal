@@ -252,7 +252,8 @@ def build_ports(design, config):
     # True 表示要畫，False 表示不畫
 
 
-    x_port, y_port = 3.000, 3.000
+    x_port, y_port = 3.500, 3.000
+    x_port4  = 3.000
     TL_width, TL_gap = 0.020, 0.012
 
     if config.draw_L1:
@@ -268,7 +269,7 @@ def build_ports(design, config):
                                                                   pad_width = 0.5, pad_height = 0.25, pad_gap = 0.2, taper_height = 0.5,
                                                                   lead_length = 0.100, trace_width=config.cpw_width, trace_gap=config.cpw_gap))
     if config.draw_L4:
-        port_L4 = LaunchpadWirebond(design, 'port_L4', options = dict(pos_x = -x_port, pos_y = -y_port, orientation = '  0', 
+        port_L4 = LaunchpadWirebond(design, 'port_L4', options = dict(pos_x = -x_port4, pos_y = -y_port, orientation = '  0', 
                                                                   pad_width = 0.5, pad_height = 0.25, pad_gap = 0.2, taper_height = 0.5,
                                                                   lead_length = 0.100, trace_width=config.cpw_width, trace_gap=config.cpw_gap))
     if config.draw_R1:
@@ -284,7 +285,7 @@ def build_ports(design, config):
                                                                   pad_width = 0.5, pad_height = 0.25, pad_gap = 0.2, taper_height = 0.5,
                                                                   lead_length = 0.100, trace_width=config.cpw_width, trace_gap=config.cpw_gap))
     if config.draw_R4:
-        port_R4 = LaunchpadWirebond(design, 'port_R4', options = dict(pos_x =  x_port, pos_y = -y_port, orientation = '180', 
+        port_R4 = LaunchpadWirebond(design, 'port_R4', options = dict(pos_x =  x_port4, pos_y = -y_port, orientation = '180', 
                                                                   pad_width = 0.5, pad_height = 0.25, pad_gap = 0.2, taper_height = 0.5,
                                                                   lead_length = 0.100, trace_width=config.cpw_width, trace_gap=config.cpw_gap))
         
@@ -344,23 +345,27 @@ def build_transmission_lines(design, config):
                  trace_width = TL_width, trace_gap = TL_gap, fillet = 0.10, hfss_wire_bonds = True,
                  lead = dict(start_straight=0.500, end_straight=0.500)))
 
-def build_qubits(design, config):
+def build_qubits(design, config, a1, a2, a3, b, c, d, delta):
     """
     Set 3 separated fluxonia with rectangles. Make sure the layers of fluxonium components are correct for fabrication process. 
     """
-    x_center, y_center = 0.000, 0.000
-    x_dis, y_dis = 1.350, 0.000
+    pocket_height = 0.500
+    pocket_width = 0.350
+    qubit_1_posx = design.components['port_L4'].pins['tie']['middle'][0] + b*3/2 + 2*b*(config.qubit_1_coupling_position_number-1)
+    qubit_2_posx = design.components['port_R4'].pins['tie']['middle'][0] - b*3/2 - 2*b*(config.qubit_1_coupling_position_number-1)
+    qubit_1_posy = design.components['port_L4'].pins['tie']['middle'][1] + delta + 2*c + a2 + a3 + pocket_height/2 +0.2
+    qubit_2_posy = qubit_1_posy
 
-    q_opt1 = {'pos_x': config.qubit_1_posx, 'pos_y': config.qubit_1_posy, 'orientation': 0, 
+    q_opt1 = {'pos_x': qubit_1_posx, 'pos_y': qubit_1_posy, 'orientation': 0, 
              'pad_gap': 0.030, 'arm_width': 0.008, 'arm_length': 0.090, 'arm_fillet': 0.020,
              'pad_width': 0.200, 'pad_height': 0.050, 'pad_fillet': 0.050, 
-             'pocket_width': 0.350, 'pocket_height': 0.500, 'pocket_fillet': 0.050, 
+             'pocket_width': pocket_width, 'pocket_height': pocket_height, 'pocket_fillet': 0.050, 
              'layer': 1, 'draw_qubit': config.draw_qubit_1}
 
-    q_opt2 = {'pos_x': config.qubit_2_posx, 'pos_y': config.qubit_2_posy, 'orientation': 0, 
+    q_opt2 = {'pos_x': qubit_2_posx, 'pos_y': qubit_2_posy, 'orientation': 0, 
              'pad_gap': 0.030, 'arm_width': 0.008, 'arm_length': 0.090, 'arm_fillet': 0.020,
              'pad_width': 0.200, 'pad_height': 0.050, 'pad_fillet': 0.050, 
-             'pocket_width': 0.350, 'pocket_height': 0.500, 'pocket_fillet': 0.050, 
+             'pocket_width': pocket_width, 'pocket_height': pocket_height, 'pocket_fillet': 0.050, 
              'layer': 1, 'draw_qubit': config.draw_qubit_2}
     if config.draw_pocket_1:
         Q1 = Fillet_Qubit(design, 'Q1', q_opt1)
@@ -482,7 +487,7 @@ def build_bias_lines(design, config):
         fl_q_stg_1 = ShortToGround(design, 'fl_q_stg_1', 
             dict(pos_x=Q1.options.pos_x-Q1.options.pocket_width/2, pos_y=Q1.options.pos_y-loop_H/2, orientation=0))
         fl_q_route_1 = RoutePathfinder(design, 'fl_q_route_1', 
-            dict(trace_width=config.cpw_width, trace_gap=config.cpw_gap, fillet=0.050, hfss_wire_bonds=True,
+            dict(trace_width=config.cpw_width, trace_gap=config.cpw_gap, fillet=0.050, hfss_wire_bonds=True, step_size='0.1mm',
                  lead = dict(start_straight=0.300, end_straight=0.900),
                  pin_inputs = Dict(start_pin = Dict(component = 'port_L3', pin = 'tie'),
                                      end_pin = Dict(component = 'fl_q_stg_1', pin = 'short'))))
@@ -552,98 +557,18 @@ def build_bias_lines(design, config):
                 pin_inputs = Dict(start_pin = Dict(component = 'port_R2', pin = 'tie'),
                                     end_pin = Dict(component = 'cl_q_stg_3', pin = 'short'))))
 
-def build_folded_tl(design, config, L_target, S_target, p, r, solution):
-    if 'port_L4' in design.components: port_L4 = design.components['port_L4']
-    if 'port_R4' in design.components: port_R4 = design.components['port_R4']
-    """
-    Add folded transmission line between bottom ports (port_L4 and port_R4)
-    """
 
-    if config.draw_folded_TL:
-        if solution==None:
-            solution = utils.solve_circuit(p, L_target, S_target, r, n_min=2, n_max=60)
-            utils.print_solution(solution, p, r)
-        prm = solution["params"]
-        a, b, c, d, l0 = prm["a"], prm["b"], prm["c"], prm["d"], prm["l0"]
-        n = solution["n"]
-        
-        # 2. 取出希臘字母陣列
-        arrs = solution["ten_arrays"]
-        alpha   = arrs["alpha"]
-        beta    = arrs["beta"]
-        gamma   = arrs["gamma"]
-        delta   = arrs["delta"]
-        epsilon = arrs["epsilon"]
-        lamb    = arrs["lambda"]
-        zeta      = arrs["zeta"]
-        mu      = arrs["mu"]
-        eta     = arrs["eta"]
-        theta   = arrs["theta"]
-        
-        # 從 port_L4 的 tie pin 取得實際出線位置，而不是元件的中心點 (pos_x, pos_y)
-        start_x, start_y = port_L4.pins['tie']['middle']
-        folded_path = utils.generate_meander_points(start_x, start_y, n, alpha, beta, gamma, delta, epsilon, lamb, zeta, mu, eta, theta, a, b, c, d, l0)
-        
-        folded_TL_width, folded_TL_gap = config.cpw_width, config.cpw_gap
-        # 使用 RoutePathfinder 來避免 RouteAnchors 的自動連接限制
-        folded_TL = RouteAnchors(
-            design, 'folded_TL',
-            dict(
-                pin_inputs = dict(
-                    start_pin = dict(component = 'port_L4', pin = 'tie'),
-                    end_pin = dict(component = 'port_R4', pin = 'tie')
-                ),
-                anchors = folded_path,
-                trace_width = folded_TL_width,
-                trace_gap = folded_TL_gap,
-                fillet = r,
-                hfss_wire_bonds = True,
-                lead = dict(start_straight=0, end_straight=0)
-            )
-        )
-        actual_length = folded_TL.length
-        print(f"元件計算後的實際長度是: {actual_length} mm")
 
-    return folded_path, start_x, start_y, n, folded_TL, solution
-
-def build_Lshapecpw(design, config, folded_path, start_x, start_y,s_pre, length_p,solution):
-    # 參數設定
-    s_list = [sum(s_pre[:i+1]) for i in range(len(s_pre))]
-    print("s_list:", s_list)
-    prm = solution["params"]
-    a, b, c, d, l0 = prm["a"], prm["b"], prm["c"], prm["d"], prm["l0"]
-
-    if config.draw_folded_TL:
-        port_L4 = design.components['port_L4']
-        port_R4 = design.components['port_R4']
-        for idx, s_val in enumerate(s_list):
-            """
-            # 取得岔出點座標
-            (branch_x, branch_y), tag = utils.get_xy_on_folded_path(
-                folded_path, s_val, 
-                config.cpw_width/2 + config.cpw_gap + 0.006, 
-                port_L4.pins['tie']['middle'][0], port_L4.pins['tie']['middle'][1], 
-                port_R4.pins['tie']['middle'][0], port_R4.pins['tie']['middle'][1],
-                a, c
-            )
-            # 印出座標供檢查，避免 Rectangle 元件造成的 bounding box 衝突
-            print(f"岔出點 cpw_p{idx} 預計位置: x = {branch_x:.5f}, y = {branch_y:.5f}, tag = {tag}")
-            """
-            
-            # 動態計算避開 Alignment mark 的安全 downlimit
-            min_down = a/2 + c + d + 0.2
-            y_target = -3.0 - min_down 
-            if -4.30 < y_target < -3.90:
-                y_target = -4.30
-            safe_downlimit = -3.0 - y_target
-
-            components.LShapedCPW(design, f"cpw_p{idx}",
-                start_x, start_y,
-                total_length=length_p[idx],folded_path=folded_path, s=s_val, downlimit=safe_downlimit, a=a, b=b, c=c)
-
-def build_coupling_pad(design, config, folded_path, n_folds, folded_TL):
+def build_coupling_pad(design, config, a1, a2, a3, b, c, d, delta):
     if 'Q1' in design.components: Q1 = design.components['Q1']
     if 'Q3' in design.components: Q3 = design.components['Q3']
+    tree_j2_to_j3 = design.components['tree_j2_to_j3']
+    tree_j3_to_j6 = design.components['tree_j3_to_j6']
+    
+    qubit_1_posx = design.components['port_L4'].pins['tie']['middle'][0] + b*3/2 + 2*b*(config.qubit_1_coupling_position_number-1)
+    qubit_2_posx = design.components['port_R4'].pins['tie']['middle'][0] - b*3/2 - 2*b*(config.qubit_1_coupling_position_number-1)
+    coupling_line_1_posy = design.components['port_L4'].pins['tie']['middle'][1] + delta + 2*c + a2 + a3
+    coupling_line_2_posy = coupling_line_1_posy
     create_u_shape = components.create_u_shape
     qubit_couple_gap = 0.06
     if config.draw_coupling_pad_1:
@@ -655,20 +580,9 @@ def build_coupling_pad(design, config, folded_path, n_folds, folded_TL):
         padbottom_x = Q3.options.pos_x
         padbottom_y = Q3.options.pos_y - Q3.options.pad_gap/2 - Q3.options.pad_height -Q3.options.arm_length - 0.005 - qubit_couple_gap
         coupling_pad3 = create_u_shape(design, cx=padbottom_x, cy=padbottom_y, name='coupling_pad3')  
-
-    for i in range(n_folds):
-        if i+1 != 13 and i+1 !=20:
-            continue
-        idx_start = 1 + i*5
-        idx_end = 2 + i*5
-        if idx_end >= len(folded_path):
-            break
-        x0, y0 = folded_path[idx_start]
-        x1, y1 = folded_path[idx_end]
-        xm = (x0 + x1) / 2
-        ym = (y0 + y1) / 2
         
-        folded_TL.add_pin(f"couple_point{i+1}", points = [[xm,ym],[xm,ym+0.0000001]],width = config.cpw_width, input_as_norm=True)
+        tree_j2_to_j3.add_pin(f"couple_point1", points = [[qubit_1_posx,coupling_line_1_posy],[qubit_1_posx,coupling_line_1_posy+0.0000001]],width = config.cpw_width, input_as_norm=True)
+        tree_j3_to_j6.add_pin(f"couple_point2", points = [[qubit_2_posx,coupling_line_2_posy],[qubit_2_posx,coupling_line_2_posy+0.0000001]],width = config.cpw_width, input_as_norm=True)
 
 
     if config.draw_couple_line_1:
@@ -677,11 +591,11 @@ def build_coupling_pad(design, config, folded_path, n_folds, folded_TL):
             dict(
                 trace_width=config.cpw_width,
                 trace_gap=config.cpw_gap,
-                fillet=0.01,
-                hfss_wire_bonds=True,
-                lead=dict(start_straight=0.1, end_straight=0.1),
+                fillet=0,
+                hfss_wire_bonds=False,
+                lead=dict(start_straight=0, end_straight=0),
                 pin_inputs=dict(
-                    start_pin=dict(component='folded_TL', pin='couple_point13'),
+                    start_pin=dict(component='tree_j2_to_j3', pin='couple_point1'),
                     end_pin=dict(component='coupling_pad1_bottom', pin='node')
                 )
             )
@@ -693,11 +607,11 @@ def build_coupling_pad(design, config, folded_path, n_folds, folded_TL):
             dict(
                 trace_width=config.cpw_width,
                 trace_gap=config.cpw_gap,
-                fillet=0.01,
-                hfss_wire_bonds=True,
-                lead=dict(start_straight=0.1, end_straight=0.1),
+                fillet=0,
+                hfss_wire_bonds=False,
+                lead=dict(start_straight=0, end_straight=0),
                 pin_inputs=dict(
-                    start_pin=dict(component='folded_TL', pin='couple_point20'),
+                    start_pin=dict(component='tree_j3_to_j6', pin='couple_point2'),
                     end_pin=dict(component='coupling_pad3_bottom', pin='node')
                 )
             )
